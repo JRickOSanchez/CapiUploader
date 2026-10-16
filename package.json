@@ -1,7 +1,7 @@
 {
   "name": "capi-uploader",
   "productName": "CapiUploader",
-  "version": "1.5.0",
+  "version": "1.0.0",
   "description": "Sube capítulos de manga a Capibara Traductor mediante su API.",
   "main": "src/main/main.js",
   "author": "SenshiManga",
