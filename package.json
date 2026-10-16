@@ -1,0 +1,73 @@
+{
+  "name": "capi-uploader",
+  "productName": "CapiUploader",
+  "version": "1.5.0",
+  "description": "Sube capítulos de manga a Capibara Traductor mediante su API.",
+  "main": "src/main/main.js",
+  "author": "SenshiManga",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.senshimanga.capiuploader",
+    "productName": "CapiUploader",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "CapiUploader",
+      "runAfterFinish": true,
+      "artifactName": "CapiUploader-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "CapiUploader-Portable-${version}.${ext}",
+      "useZip": true
+    },
+    "electronLanguages": [
+      "es",
+      "es-419",
+      "en-US"
+    ],
+    "compression": "normal"
+  },
+  "devDependencies": {
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3"
+  }
+}
