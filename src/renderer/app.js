@@ -985,7 +985,7 @@ function setUploadingUI(on) {
   $('#resetBtn').hidden = on
   $('#uploadBtn').disabled = on
   $('#uploadBtnText').textContent = on ? 'Subiendo…' : state.mode === 'batch' ? 'Subir capítulos' : 'Subir capítulo'
-  $('.column-form input, .column-form button, .column-form select, #pagesToolbar button, #dropzone button, #batchToolbar button, #batchDrop button, #batchList input, #batchList button').forEach((n) => {
+  $$('.column-form input, .column-form button, .column-form select, #pagesToolbar button, #dropzone button, #batchToolbar button, #batchDrop button, #batchList input, #batchList button').forEach((n) => {
     if (on) { n.dataset.wasDisabled = n.disabled ? '1' : ''; n.disabled = true }
     else { n.disabled = n.dataset.wasDisabled === '1'; delete n.dataset.wasDisabled }
   })
