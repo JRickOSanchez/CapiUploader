@@ -832,3 +832,105 @@ h3 { font-weight: 900; font-style: italic; text-transform: uppercase; letter-spa
 /* Títulos de dos tonos: texto corrido (sin el espacio extra del flex) */
 h2 { display: block; }
 h2 .badge { margin-left: 6px; vertical-align: 2px; }
+
+/* =========================================================
+   v1.1 · Varios scans
+   ========================================================= */
+.scan-menu { position: relative; }
+.scan-chip .chev { width: 14px; height: 14px; color: var(--text-3); transition: transform .2s; }
+.scan-chip[aria-expanded="true"] { border-color: var(--accent); }
+.scan-chip[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.scan-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 300px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px;
+  box-shadow: var(--shadow-lg); padding: 8px; animation: pop .16s var(--ease); -webkit-app-region: no-drag;
+}
+.scan-pop-title { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); padding: 6px 8px 8px; }
+.scan-pop-list { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.scan-pop-empty { padding: 14px 8px; color: var(--text-3); font-size: 12.5px; }
+.scan-item {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; border: 0;
+  background: transparent; color: var(--text); cursor: pointer; text-align: left; font: inherit;
+}
+.scan-item:hover { background: var(--surface-3); }
+.scan-item.active { background: var(--accent-soft); }
+.scan-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.scan-item-name { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scan-item-sub { font-size: 11.5px; color: var(--text-3); }
+.scan-item-sub.warn { color: var(--warning); }
+.scan-item-sub.err { color: var(--danger); }
+.scan-item-check { color: var(--accent); display: grid; }
+.scan-pop-actions { display: flex; gap: 4px; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; }
+.scan-pop-actions .btn { flex: 1; }
+.scan-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  background: var(--accent); color: var(--on-accent); font-weight: 900; font-size: 14px;
+}
+
+.modal-card.scans-card { width: min(620px, 100%); }
+.scan-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.scan-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.scan-row.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.scan-row .scan-avatar { width: 40px; height: 40px; font-size: 16px; }
+.scan-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.scan-row-name { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; }
+.scan-row-sub { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--text-3); flex-wrap: wrap; }
+.scan-row-sub .sep::before { content: "•"; opacity: .6; }
+.scan-row-scopes { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.scan-row-scopes .badge { font-size: 10.5px; height: 18px; }
+.scan-row-status { font-size: 11.5px; font-weight: 700; }
+.scan-row-status.warn { color: var(--warning); }
+.scan-row-status.err { color: var(--danger); }
+.scan-row-actions { display: flex; gap: 4px; align-items: center; }
+.scan-add { border-top: 1px solid var(--border); padding-top: 14px; }
+.scan-add .modal-actions { margin-top: 10px; }
+.scan-add .modal-actions .hint { max-width: 330px; }
+.badge.danger { background: var(--danger-soft); color: var(--danger); }
+.icon-btn.danger-hover:hover { color: var(--danger); background: var(--danger-soft); }
+.icon-btn.confirm { color: #fff; background: var(--danger); }
+
+/* =========================================================
+   v1.1 · Grupos por obra y acceso por capítulo
+   ========================================================= */
+.chapter-list .group-head {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-top: 6px; border-radius: 14px;
+  background: var(--surface-3); border: 1px solid var(--border);
+}
+.chapter-list .group-head:first-child { margin-top: 0; }
+.group-head .cover { width: 34px; height: 48px; }
+.group-head.none { border-style: dashed; border-color: var(--warning); background: var(--warning-soft); }
+.group-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.group-title { display: flex; align-items: center; gap: 8px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -.01em; }
+.group-title > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-title .badge { font-style: normal; text-transform: none; letter-spacing: 0; font-size: 10.5px; height: 18px; flex: none; }
+.group-meta { font-size: 11.5px; color: var(--text-3); }
+.group-actions { display: flex; gap: 6px; align-items: center; flex: none; }
+.group-actions .btn span { display: inline-grid; }
+.group-actions .btn svg { width: 14px; height: 14px; }
+
+.ch-access { display: flex; gap: 8px; align-items: center; }
+.ch-access select, .ch-access input { height: 34px; border-radius: 8px; font-size: 12.5px; }
+.ch-access select { padding-right: 28px; background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px; font-weight: 700; }
+.ch-access-select.access-public { color: var(--text); }
+.ch-access-select.access-early-date, .ch-access-select.access-early-manual { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 55%, var(--border-strong)); background-color: var(--gold-soft); }
+.ch-release { width: 210px; flex: none; }
+.ch-release.auto { color: var(--text-2); font-style: italic; }
+.chrow.early { box-shadow: inset 3px 0 0 var(--gold); }
+
+/* Selector flotante de obra */
+.work-picker {
+  position: fixed; z-index: 120; width: 340px; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden; animation: pop .14s var(--ease);
+}
+.work-picker .combo-list { max-height: 320px; }
+
+/* Bloque de acceso en «Publicación» */
+.access-block { display: flex; flex-direction: column; gap: 12px; }
+.access-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.access-block .inline input#accLastN { flex: 0 0 64px; }
+.access-block .inline .inline-text { white-space: nowrap; }
+/* El menú de scans vive en la barra superior: la barra debe quedar por encima del contenido. */
+.topbar { position: relative; z-index: 50; }

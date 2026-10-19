@@ -4,10 +4,15 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args)
 
 contextBridge.exposeInMainWorld('capi', {
   settings: {
-    get: () => invoke('settings:get'),
-    setKey: (key) => invoke('settings:setKey', key),
-    clearKey: () => invoke('settings:clearKey'),
     setTheme: (theme, resolved) => invoke('settings:setTheme', theme, resolved),
+  },
+  // Scans registrados: la interfaz nunca recibe las claves, solo sus datos públicos.
+  profiles: {
+    list: () => invoke('profiles:list'),
+    add: (key) => invoke('profiles:add', key),
+    setActive: (id) => invoke('profiles:setActive', id),
+    remove: (id) => invoke('profiles:remove', id),
+    verify: (id) => invoke('profiles:verify', id),
   },
   system: {
     prefersDark: () => invoke('system:prefersDark'),

@@ -5,6 +5,10 @@ const { pathToFileURL } = require('node:url')
 const store = require('./store')
 const api = require('./api')
 
+// Solo en desarrollo (sin empaquetar): las pruebas usan su propia carpeta de configuración
+// para no tocar nunca la del usuario. La app instalada ignora esta variable.
+if (!app.isPackaged && process.env.CAPI_USER_DATA_DIR) app.setPath('userData', process.env.CAPI_USER_DATA_DIR)
+
 const IMAGE_TYPES = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -64,45 +68,110 @@ function handle(channel, fn) {
     try {
       return { ok: true, data: await fn(...args) }
     } catch (err) {
+      markActiveIfInvalid(err)
       return { ok: false, error: { message: err.message, code: err.code || null, status: err.status || null } }
     }
   })
 }
 
 function requireKey() {
-  const key = store.getApiKey()
+  const id = store.getActiveId()
+  const key = id != null ? store.getProfileKey(id) : null
   if (!key) {
-    const err = new Error('Configura tu API key para continuar.')
+    const err = new Error(id != null
+      ? 'No se pudo leer la API key de este scan. Vuelve a agregarla en «Mis scans».'
+      : 'Agrega la API key de tu scan para continuar.')
     err.code = 'api.key_missing'
     throw err
   }
   return key
 }
 
+/** Si una petición con la clave activa responde «clave inválida», se marca el scan. */
+function markActiveIfInvalid(err) {
+  if (err?.code !== 'api.key_invalid') return
+  const id = store.getActiveId()
+  if (id != null) store.updateProfile(id, { status: 'invalid' })
+}
+
 // ---------- Ajustes ----------
 
-handle('settings:get', async () => ({
-  hasKey: Boolean(store.getApiKey()),
-  keyPreview: store.getApiKey() ? store.getApiKey().slice(0, 12) + '…' : null,
-  encrypted: store.isEncryptionAvailable(),
-  theme: store.get('theme') || 'system',
-}))
+// ---------- Scans (varias API keys) ----------
 
-handle('settings:setKey', async (key) => {
+/** La versión 1.0 guardaba una sola clave sin datos del scan: se convierte en el primer perfil. */
+let migration = null
+function migrateLegacy() {
+  if (!migration) {
+    migration = (async () => {
+      const legacy = store.takeLegacyKey()
+      if (!legacy) return
+      try {
+        const me = await api.request(legacy, 'GET', '/me')
+        store.upsertProfile(legacy, me.data)
+        if (store.get('activeScanId') == null) store.setActiveId(me.data.scan.id)
+        store.clearLegacyKey()
+      } catch {
+        // Nunca se borra la clave vieja por un error: se conserva y se reintenta en el próximo
+        // arranque. Solo desaparece al migrarse o cuando el usuario agrega un scan.
+        migration = null
+      }
+    })()
+  }
+  return migration
+}
+
+function profilesState() {
+  return { profiles: store.listProfiles(), activeId: store.getActiveId(), encrypted: store.isEncryptionAvailable() }
+}
+
+handle('profiles:list', async () => {
+  await migrateLegacy()
+  return profilesState()
+})
+
+handle('profiles:add', async (key) => {
   key = String(key || '').trim()
   if (!/^capi_[A-Za-z0-9]{40}$/.test(key)) {
     const err = new Error('La clave debe ser "capi_" seguido de 40 letras o números.')
     err.code = 'api.invalid_request'
     throw err
   }
-  const me = await api.request(key, 'GET', '/me')
-  store.setApiKey(key)
-  return me.data
+  if (currentUpload) throw new Error('Espera a que termine la subida para cambiar de scan.')
+  const me = (await api.request(key, 'GET', '/me')).data
+  const { profile, replaced } = store.upsertProfile(key, me)
+  store.setActiveId(profile.id)
+  store.clearLegacyKey()
+  return { ...profilesState(), added: profile, replaced, me }
 })
 
-handle('settings:clearKey', async () => {
-  store.setApiKey(null)
-  return true
+handle('profiles:setActive', async (id) => {
+  if (currentUpload) throw new Error('Espera a que termine la subida para cambiar de scan.')
+  if (!store.getProfile(id)) throw new Error('Ese scan ya no está registrado.')
+  store.setActiveId(id)
+  return profilesState()
+})
+
+handle('profiles:remove', async (id) => {
+  if (currentUpload && id === store.getActiveId()) throw new Error('Espera a que termine la subida para quitar este scan.')
+  store.removeProfile(id)
+  return profilesState()
+})
+
+/** Vuelve a consultar /me con la clave del scan para actualizar permisos y estado. */
+handle('profiles:verify', async (id) => {
+  const key = store.getProfileKey(id)
+  if (!key) throw new Error('No se pudo leer la API key de este scan. Vuelve a agregarla.')
+  try {
+    const me = (await api.request(key, 'GET', '/me')).data
+    store.updateProfile(id, {
+      name: me.scan.name, slug: me.scan.slug, url: me.scan.url, prefix: me.key.prefix,
+      keyName: me.key.name, scopes: me.key.scopes, expiresAt: me.key.expiresAt, status: 'ok',
+    })
+    return { ...profilesState(), me }
+  } catch (err) {
+    if (err.code === 'api.key_invalid') store.updateProfile(id, { status: 'invalid' })
+    throw err
+  }
 })
 
 handle('settings:setTheme', async (theme, resolved) => {
@@ -207,9 +276,17 @@ async function listImages(dir) {
   return out
 }
 
+async function listSubdirs(dir) {
+  return (await fs.readdir(dir, { withFileTypes: true }))
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort(naturalCompare)
+}
+
 /**
- * Modo de varios capítulos: cada carpeta con imágenes es un capítulo. Si una carpeta
- * no tiene imágenes pero sí subcarpetas, cada subcarpeta con imágenes es un capítulo.
+ * Modo de varios capítulos: cada carpeta con imágenes es un capítulo. Se aceptan hasta
+ * dos niveles bajo lo que se suelta, p. ej. «Lote/Kirara/Cap 4». parent es el nombre de
+ * la carpeta que contiene al capítulo y sirve para adivinar la obra.
  */
 async function resolveChapters(paths) {
   const chapters = []
@@ -221,20 +298,26 @@ async function resolveChapters(paths) {
     if (!st.isDirectory()) { looseFiles++; continue }
     const files = await listImages(p)
     if (files.length) {
-      chapters.push({ name: path.basename(p), dir: p, files })
+      chapters.push({ name: path.basename(p), dir: p, parent: path.basename(path.dirname(p)), files })
       continue
     }
-    const subdirs = (await fs.readdir(p, { withFileTypes: true }))
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
-      .sort(naturalCompare)
     let found = 0
-    for (const sub of subdirs) {
+    for (const sub of await listSubdirs(p)) {
       const dir = path.join(p, sub)
       const subFiles = await listImages(dir).catch(() => [])
       if (subFiles.length) {
-        chapters.push({ name: sub, dir, files: subFiles })
+        chapters.push({ name: sub, dir, parent: path.basename(p), files: subFiles })
         found++
+        continue
+      }
+      // Segundo nivel: «Lote/Obra/Capítulo».
+      for (const sub2 of await listSubdirs(dir).catch(() => [])) {
+        const dir2 = path.join(dir, sub2)
+        const files2 = await listImages(dir2).catch(() => [])
+        if (files2.length) {
+          chapters.push({ name: sub2, dir: dir2, parent: sub, files: files2 })
+          found++
+        }
       }
     }
     if (!found) skipped.push(path.basename(p))
@@ -450,6 +533,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   store.init(app.getPath('userData'))
+  migrateLegacy()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
