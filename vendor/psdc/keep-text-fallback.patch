@@ -1,0 +1,14 @@
+diff --git a/src/render/layer.rs b/src/render/layer.rs
+index 7efcccc..6defbf6 100644
+--- a/src/render/layer.rs
++++ b/src/render/layer.rs
+@@ -416,7 +416,8 @@ pub(crate) fn render_layer(ctx: &Ctx, index: usize) -> LayerOutput {
+     }
+     out.effects = layer_effects(doc, cs, l);
+     let pad = out.effects.reach().ceil() as usize;
+-    let is_text = l.kind == LayerKind::Text && !ctx.options.keep_text_raster;
++    // CapiUploader: with keep_text_raster, a type layer without cached pixels is still drawn.
++    let is_text = l.kind == LayerKind::Text && (!ctx.options.keep_text_raster || !has_pixels(l));
+     let mut baked_vector = false;
+     let soft_vector = l.vector_density < 1.0 || l.vector_feather > 0.0;
+     let content = if is_text {

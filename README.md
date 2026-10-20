@@ -24,6 +24,22 @@ Al actualizar desde la 1.0, la clave guardada se convierte sola en el primer sca
   - Cada capítulo elige su acceso: público, anticipado con fecha de liberación o anticipado sin fecha.
   - La programación escalonada lleva una secuencia por obra.
 
+## Archivos de Photoshop (PSD)
+
+Las páginas pueden ser `.psd` o `.psb`, en los dos modos y mezcladas con imágenes normales. Al
+agregarlas se convierten a JPG (calidad 92) con [psdc](https://github.com/ChoqueCastroLD/psd-compiler-cli),
+que compone todas las capas y vuelve a dibujar el texto con las fuentes instaladas en el equipo.
+
+- Las conversiones se guardan en `%APPDATA%\CapiUploader\psd-cache` (se borran a los 3 días) y se
+  reutilizan mientras el PSD no cambie.
+- Si falta una fuente, la página se convierte otra vez con el texto que Photoshop guardó en el archivo,
+  para que se vea tal como la dejó el editor. Si una capa no tiene ese texto guardado, se dibuja con una
+  fuente parecida y la app avisa. Estas conversiones no se reutilizan: al instalar las fuentes y volver a
+  agregar el archivo se convierte de nuevo.
+
+`psdc.exe` está en `vendor/psdc/` y se empaqueta con la app. Cómo se compiló y el parche que lleva
+están en `vendor/psdc/SOURCE.md`.
+
 ## Generar instalador
 
 ```bash
@@ -48,6 +64,7 @@ pruebas no toquen la del usuario. La app instalada la ignora.
 
 ## Estructura
 
-- `src/main/` — proceso principal: cliente de la API, scans y claves, flujo de subida.
+- `src/main/` — proceso principal: cliente de la API, scans y claves, flujo de subida. `psd.js` convierte los PSD.
 - `src/preload/` — puente seguro (`window.capi`) entre la UI y el proceso principal.
 - `src/renderer/` — interfaz (HTML/CSS/JS sin frameworks). `batch.js` es el modo «Varios capítulos».
+- `vendor/psdc/` — conversor de PSD (MIT) que se incluye en el instalador.

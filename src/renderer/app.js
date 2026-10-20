@@ -92,6 +92,42 @@ function toast(type, title, msg, ms = 5000) {
 }
 
 /* =========================================================
+   PSD: avance de la conversión y resumen
+   ========================================================= */
+let psdBusy = null
+window.capi.files.onPsdProgress((p) => {
+  if (p.finished) {
+    if (psdBusy) { psdBusy.classList.add('out'); const n = psdBusy; setTimeout(() => n.remove(), 200); psdBusy = null }
+    return
+  }
+  if (!psdBusy) {
+    psdBusy = el('div', { class: 'toast info psd-busy' },
+      el('span', { html: ICONS.spinner }),
+      el('div', {}, el('div', { class: 'toast-title', text: 'Convirtiendo archivos PSD…' }), el('div', { class: 'toast-msg' })),
+    )
+    $('#toasts').append(psdBusy)
+  }
+  psdBusy.querySelector('.toast-msg').textContent = `${formatNumber(p.done)} de ${formatNumber(p.total)}`
+})
+
+/** Avisa de lo que pasó al convertir PSD: fuentes que faltan y archivos que no se pudieron leer. */
+function reportPsd(report) {
+  if (!report) return
+  if (report.failed.length) {
+    toast('error', `No se pudieron convertir ${report.failed.length} PSD`, `${report.failed.slice(0, 3).join(', ')}${report.failed.length > 3 ? '…' : ''}. Puede que estén dañados o se hayan guardado con otra versión del formato.`, 9000)
+  }
+  if (report.missingFonts.length) {
+    const fonts = report.missingFonts.slice(0, 4).join(', ') + (report.missingFonts.length > 4 ? '…' : '')
+    const kept = report.keptText.length
+    const subst = report.substituted
+    toast('warn', `Faltan fuentes en este equipo: ${fonts}`,
+      (kept ? `${kept === 1 ? '1 página usa' : `${kept} páginas usan`} el texto tal como lo guardó Photoshop. ` : '')
+      + (subst ? `${subst === 1 ? '1 página se dibujó' : `${subst} páginas se dibujaron`} con una fuente parecida: revísalas. ` : '')
+      + 'Para usar las fuentes originales, instálalas y vuelve a agregar los archivos.', 12000)
+  }
+}
+
+/* =========================================================
    Estado
    ========================================================= */
 const state = {
@@ -653,7 +689,7 @@ async function addPaths(paths) {
   addResolved(res.data)
 }
 
-function addResolved({ files, skipped }) {
+function addResolved({ files, skipped, psd }) {
   const existing = new Set(state.files.map((f) => f.path))
   const fresh = files.filter((f) => !existing.has(f.path))
   const dupes = files.length - fresh.length
@@ -663,10 +699,11 @@ function addResolved({ files, skipped }) {
   state.files.push(...accepted.map((f) => ({ ...f, id: ++fileSeq, status: null })))
   if (wasEmpty) state.files.sort((a, b) => naturalCompare(a.name, b.name))
 
-  if (skipped.length) toast('warn', `${skipped.length} archivo(s) ignorado(s)`, `Solo se aceptan JPG, PNG, WEBP, GIF y AVIF. ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '…' : ''}`)
+  if (skipped.length) toast('warn', `${skipped.length} archivo(s) ignorado(s)`, `Solo se aceptan JPG, PNG, WEBP, GIF, AVIF y PSD. ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '…' : ''}`)
   if (dupes) toast('info', `${dupes} imagen(es) ya estaban en la lista`)
   if (fresh.length > accepted.length) toast('warn', 'Límite de páginas', `Un capítulo admite como máximo ${MAX_PAGES} páginas.`)
   if (!files.length && !skipped.length) toast('warn', 'No se encontraron imágenes')
+  reportPsd(psd)
   renderThumbs()
   validate()
 }

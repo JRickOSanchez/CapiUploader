@@ -4,6 +4,7 @@ const fs = require('node:fs/promises')
 const { pathToFileURL } = require('node:url')
 const store = require('./store')
 const api = require('./api')
+const psd = require('./psd')
 
 // Solo en desarrollo (sin empaquetar): las pruebas usan su propia carpeta de configuración
 // para no tocar nunca la del usuario. La app instalada ignora esta variable.
@@ -226,7 +227,8 @@ handle('api:chapters', async (workId) => {
 
 // ---------- Archivos ----------
 
-async function describeFile(filePath) {
+/** Describe una imagen. source es el PSD original cuando la imagen es su conversión. */
+async function describeFile(filePath, source = null) {
   const ext = path.extname(filePath).toLowerCase()
   const type = IMAGE_TYPES[ext]
   if (!type) return null
@@ -234,46 +236,86 @@ async function describeFile(filePath) {
   if (!st.isFile()) return null
   return {
     path: filePath,
-    name: path.basename(filePath),
+    name: path.basename(source || filePath),
     size: st.size,
     mtime: st.mtimeMs,
     type,
     url: pathToFileURL(filePath).href,
+    ...(source ? { source } : {}),
   }
+}
+
+function isAccepted(filePath) {
+  const ext = path.extname(filePath).toLowerCase()
+  return Boolean(IMAGE_TYPES[ext]) || psd.PSD_EXTS.has(ext)
+}
+
+/** Resumen de la conversión de PSD para la interfaz (null si no había ninguno). */
+function psdReport(summary) {
+  if (!summary) return null
+  return {
+    converted: summary.converted,
+    cached: summary.cached,
+    keptText: summary.keptText,
+    missingFonts: [...summary.missingFonts],
+    substituted: summary.substituted,
+    failed: summary.failed,
+  }
+}
+
+/**
+ * Describe una lista de rutas en orden. Los PSD se convierten todos juntos (psdc los procesa
+ * en paralelo) y se describen como su JPG en caché. Las rutas que no sirven van a skipped.
+ */
+async function describeMany(paths) {
+  const psdPaths = paths.filter(psd.isPsd)
+  let converted = null
+  let summary = null
+  if (psdPaths.length) {
+    ;({ result: converted, summary } = await psd.convertAll(psdPaths, (p) => win?.webContents.send('psd:progress', p)))
+    win?.webContents.send('psd:progress', { finished: true })
+  }
+  const files = []
+  const skipped = []
+  for (const p of paths) {
+    let f = null
+    if (psd.isPsd(p)) {
+      const c = converted.get(p)
+      if (c?.out) f = await describeFile(c.out, p).catch(() => null)
+    } else {
+      f = await describeFile(p).catch(() => null)
+    }
+    if (f) files.push(f)
+    else skipped.push(path.basename(p))
+  }
+  return { files, skipped, summary }
 }
 
 /** Expande carpetas (un nivel) y devuelve solo imágenes válidas, ordenadas por nombre dentro de cada carpeta. */
 async function resolvePaths(paths) {
-  const out = []
+  const candidates = []
   const skipped = []
   for (const p of paths) {
     let st
     try { st = await fs.stat(p) } catch { skipped.push(path.basename(p)); continue }
     if (st.isDirectory()) {
-      const entries = (await fs.readdir(p)).sort(naturalCompare)
-      for (const name of entries) {
-        const f = await describeFile(path.join(p, name)).catch(() => null)
-        if (f) out.push(f)
-      }
+      candidates.push(...await listCandidates(p))
+    } else if (isAccepted(p)) {
+      candidates.push(p)
     } else {
-      const f = await describeFile(p).catch(() => null)
-      if (f) out.push(f)
-      else skipped.push(path.basename(p))
+      skipped.push(path.basename(p))
     }
   }
-  return { files: out, skipped }
+  const res = await describeMany(candidates)
+  return { files: res.files, skipped: [...skipped, ...res.skipped], psd: psdReport(res.summary) }
 }
 
 handle('files:resolve', async (paths) => resolvePaths(Array.isArray(paths) ? paths : []))
 
-async function listImages(dir) {
+/** Imágenes y PSD de una carpeta (sin entrar a subcarpetas), en orden natural. */
+async function listCandidates(dir) {
   const names = (await fs.readdir(dir)).sort(naturalCompare)
-  const out = []
-  for (const name of names) {
-    const f = await describeFile(path.join(dir, name)).catch(() => null)
-    if (f) out.push(f)
-  }
-  return out
+  return names.filter(isAccepted).map((name) => path.join(dir, name))
 }
 
 async function listSubdirs(dir) {
@@ -289,40 +331,51 @@ async function listSubdirs(dir) {
  * la carpeta que contiene al capítulo y sirve para adivinar la obra.
  */
 async function resolveChapters(paths) {
-  const chapters = []
+  const found = [] // { name, dir, parent, candidates }
   const skipped = []
   let looseFiles = 0
   for (const p of paths) {
     let st
     try { st = await fs.stat(p) } catch { skipped.push(path.basename(p)); continue }
     if (!st.isDirectory()) { looseFiles++; continue }
-    const files = await listImages(p)
-    if (files.length) {
-      chapters.push({ name: path.basename(p), dir: p, parent: path.basename(path.dirname(p)), files })
+    const candidates = await listCandidates(p)
+    if (candidates.length) {
+      found.push({ name: path.basename(p), dir: p, parent: path.basename(path.dirname(p)), candidates })
       continue
     }
-    let found = 0
+    let count = 0
     for (const sub of await listSubdirs(p)) {
       const dir = path.join(p, sub)
-      const subFiles = await listImages(dir).catch(() => [])
+      const subFiles = await listCandidates(dir).catch(() => [])
       if (subFiles.length) {
-        chapters.push({ name: sub, dir, parent: path.basename(p), files: subFiles })
-        found++
+        found.push({ name: sub, dir, parent: path.basename(p), candidates: subFiles })
+        count++
         continue
       }
       // Segundo nivel: «Lote/Obra/Capítulo».
       for (const sub2 of await listSubdirs(dir).catch(() => [])) {
         const dir2 = path.join(dir, sub2)
-        const files2 = await listImages(dir2).catch(() => [])
+        const files2 = await listCandidates(dir2).catch(() => [])
         if (files2.length) {
-          chapters.push({ name: sub2, dir: dir2, parent: sub, files: files2 })
-          found++
+          found.push({ name: sub2, dir: dir2, parent: sub, candidates: files2 })
+          count++
         }
       }
     }
-    if (!found) skipped.push(path.basename(p))
+    if (!count) skipped.push(path.basename(p))
   }
-  return { chapters, skipped, looseFiles }
+
+  // Todas las páginas de todos los capítulos de una vez, para convertir los PSD en un solo paso.
+  const all = found.flatMap((c) => c.candidates)
+  const { files, summary } = await describeMany(all)
+  const byPath = new Map(files.map((f) => [f.source || f.path, f]))
+  const chapters = []
+  for (const c of found) {
+    const chFiles = c.candidates.map((p) => byPath.get(p)).filter(Boolean)
+    if (chFiles.length) chapters.push({ name: c.name, dir: c.dir, parent: c.parent, files: chFiles })
+    else skipped.push(c.name)
+  }
+  return { chapters, skipped, looseFiles, psd: psdReport(summary) }
 }
 
 handle('files:resolveChapters', async (paths) => resolveChapters(Array.isArray(paths) ? paths : []))
@@ -332,7 +385,7 @@ handle('files:pickChapters', async () => {
     title: 'Selecciona las carpetas de los capítulos',
     properties: ['openDirectory', 'multiSelections'],
   })
-  if (res.canceled) return { chapters: [], skipped: [], looseFiles: 0 }
+  if (res.canceled) return { chapters: [], skipped: [], looseFiles: 0, psd: null }
   return resolveChapters(res.filePaths)
 })
 
@@ -342,9 +395,9 @@ handle('files:pick', async (mode) => {
     : {
         title: 'Selecciona las páginas del capítulo',
         properties: ['openFile', 'multiSelections'],
-        filters: [{ name: 'Imágenes', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'] }],
+        filters: [{ name: 'Imágenes y PSD', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'psd', 'psb'] }],
       })
-  if (res.canceled) return { files: [], skipped: [] }
+  if (res.canceled) return { files: [], skipped: [], psd: null }
   return resolvePaths(res.filePaths)
 })
 
@@ -533,6 +586,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   store.init(app.getPath('userData'))
+  psd.init(app.getPath('userData')).catch(() => {})
   migrateLegacy()
   createWindow()
   app.on('activate', () => {

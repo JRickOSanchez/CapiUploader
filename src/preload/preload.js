@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('capi', {
     pick: (mode) => invoke('files:pick', mode),
     resolveChapters: (paths) => invoke('files:resolveChapters', paths),
     pickChapters: () => invoke('files:pickChapters'),
+    // Avance de la conversión de PSD: { done, total } y al final { finished: true }.
+    onPsdProgress: (cb) => ipcRenderer.on('psd:progress', (_e, p) => cb(p)),
   },
   upload: {
     start: (payload) => invoke('chapter:upload', payload),

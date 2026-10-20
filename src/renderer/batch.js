@@ -188,7 +188,7 @@ async function addChapterPaths(paths) {
   addChapters(res.data)
 }
 
-async function addChapters({ chapters, skipped, looseFiles }) {
+async function addChapters({ chapters, skipped, looseFiles, psd }) {
   const known = new Set(batch.items.map((i) => i.dir))
   const fresh = chapters.filter((c) => !known.has(c.dir))
   const dupes = chapters.length - fresh.length
@@ -246,6 +246,7 @@ async function addChapters({ chapters, skipped, looseFiles }) {
   if (looseFiles) toast('warn', 'Se ignoraron imágenes sueltas', 'En este modo cada capítulo debe ser una carpeta. Para un solo capítulo usa «Un capítulo».', 7000)
   if (skipped.length) toast('warn', `${skipped.length} carpeta(s) sin imágenes`, skipped.slice(0, 3).join(', ') + (skipped.length > 3 ? '…' : ''))
   if (!chapters.length && !looseFiles && !skipped.length) toast('warn', 'No se encontraron capítulos')
+  reportPsd(psd)
 
   renderBatch()
   batchValidate()
