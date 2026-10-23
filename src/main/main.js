@@ -5,6 +5,9 @@ const { pathToFileURL } = require('node:url')
 const store = require('./store')
 const api = require('./api')
 const psd = require('./psd')
+const { downloadChapters } = require('./download')
+const scrape = require('./scrape')
+const importer = require('./importer')
 
 // Solo en desarrollo (sin empaquetar): las pruebas usan su propia carpeta de configuración
 // para no tocar nunca la del usuario. La app instalada ignora esta variable.
@@ -54,6 +57,12 @@ function createWindow() {
   win.removeMenu()
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
   win.once('ready-to-show', () => win.show())
+  // Las ventanas ocultas del motor de importación no deben mantener viva la app.
+  win.on('closed', () => {
+    win = null
+    scrape.shutdown()
+    if (process.platform !== 'darwin') app.quit()
+  })
 
   // Los enlaces externos se abren en el navegador, nunca dentro de la app.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -520,12 +529,7 @@ handle('chapter:upload', async (payload) => {
     // announcePage: número de página (1 = la primera), null = portada; sin el campo, el default del scan.
     if (chapter.announcePage !== undefined) body.announcePage = chapter.announcePage
     if (chapter.publishAt) body.publishAt = chapter.publishAt
-    if (chapter.earlyAccess) {
-      body.earlyAccess = true
-      if (chapter.releaseAt) body.releaseAt = chapter.releaseAt
-    } else if (chapter.notify === false) {
-      body.notify = false
-    }
+    if (chapter.notify === false) body.notify = false
     const created = await api.request(key, 'POST', `/works/${Number(workId)}/chapters`, body, signal)
 
     // Tras crearse, las claves ya pertenecen al capítulo: no deben reutilizarse.
@@ -574,6 +578,106 @@ handle('chapter:cancel', async () => {
   return true
 })
 
+// ---------- Descargar de Capibara ----------
+
+let currentDownload = null
+// Solo se abren en el explorador carpetas creadas por una descarga.
+const openableDirs = new Set()
+
+function defaultDownloadDir() {
+  return store.get('downloadDir') || path.join(app.getPath('downloads'), 'CapiUploader')
+}
+
+handle('download:folder', async () => defaultDownloadDir())
+
+handle('download:pickFolder', async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Carpeta donde guardar los capítulos',
+    defaultPath: defaultDownloadDir(),
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (res.canceled) return null
+  store.set('downloadDir', res.filePaths[0])
+  return res.filePaths[0]
+})
+
+handle('download:start', async ({ work, chapters, dest, format } = {}) => {
+  if (currentDownload) throw new Error('Ya hay una descarga en curso.')
+  if (!work?.id || !Array.isArray(chapters) || !chapters.length) throw new Error('Elige los capítulos a descargar.')
+  const key = requireKey()
+  const controller = new AbortController()
+  currentDownload = controller
+  try {
+    const target = typeof dest === 'string' && path.isAbsolute(dest) ? dest : defaultDownloadDir()
+    const list = chapters.map((c) => ({
+      id: Number(c.id), number: c.number, volumeNumber: c.volumeNumber ?? null, title: c.title || '',
+    })).filter((c) => Number.isInteger(c.id))
+    const summary = await downloadChapters({
+      key,
+      work: { id: Number(work.id), title: String(work.title || '') },
+      chapters: list,
+      dest: target,
+      format: ['original', 'jpg', 'png'].includes(format) ? format : 'jpg',
+      signal: controller.signal,
+      onProgress: (p) => {
+        if (p.dir) openableDirs.add(p.dir)
+        win?.webContents.send('download:progress', p)
+      },
+    })
+    openableDirs.add(summary.workDir)
+    return summary
+  } finally {
+    currentDownload = null
+  }
+})
+
+handle('download:cancel', async () => {
+  currentDownload?.abort()
+  return true
+})
+
+// ---------- Importar de web ----------
+
+let currentImport = null
+
+handle('import:identify', async (url) => importer.identify(url))
+
+handle('import:open', async (url, websiteId) => importer.open(url, websiteId))
+
+handle('import:download', async ({ key, workTitle, chapters } = {}) => {
+  if (currentImport) throw new Error('Ya hay una importación en curso.')
+  if (!key || !Array.isArray(chapters) || !chapters.length) throw new Error('Elige los capítulos a importar.')
+  const controller = new AbortController()
+  currentImport = controller
+  try {
+    return await importer.download({
+      key: String(key),
+      workTitle: String(workTitle || ''),
+      chapters: chapters.map((c) => ({
+        index: Number(c.index), number: c.number, volumeNumber: c.volumeNumber ?? null, title: String(c.title || '').slice(0, 256),
+      })).filter((c) => Number.isInteger(c.index) && c.number != null),
+      signal: controller.signal,
+      onProgress: (p) => win?.webContents.send('import:progress', p),
+    })
+  } finally {
+    currentImport = null
+  }
+})
+
+handle('import:cancel', async () => {
+  currentImport?.abort()
+  return true
+})
+
+handle('import:release', async (key) => importer.release(String(key)))
+
+handle('download:open', async (dir) => {
+  if (!openableDirs.has(dir)) throw new Error('Carpeta no disponible.')
+  const err = await shell.openPath(dir)
+  if (err) throw new Error(err)
+  return true
+})
+
 // ---------- Ciclo de vida ----------
 
 // Una sola instancia: abrir el acceso directo otra vez enfoca la ventana existente.
@@ -587,12 +691,16 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   store.init(app.getPath('userData'))
   psd.init(app.getPath('userData')).catch(() => {})
+  importer.init(app.getPath('userData')).catch(() => {})
   migrateLegacy()
   createWindow()
+  scrape.init(win)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+app.on('before-quit', () => scrape.shutdown())
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

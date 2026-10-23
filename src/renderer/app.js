@@ -150,6 +150,7 @@ const state = {
   attempted: false,
   lastResult: null,
   mode: 'single', // 'single' | 'batch' (ver batch.js)
+  view: 'upload', // 'upload' | 'import' | 'download' (ver views.js)
 }
 let fileSeq = 0
 
@@ -291,6 +292,8 @@ function onScanChanged() {
   state.autoNumber = true
   state.autoVolume = true
   if (typeof batchOnScanChanged === 'function') batchOnScanChanged()
+  if (typeof dlOnScanChanged === 'function') dlOnScanChanged()
+  if (typeof imOnScanChanged === 'function') imOnScanChanged()
   renderScanChip()
   renderWorkTrigger()
   renderWorkInfo()
@@ -484,6 +487,8 @@ async function loadWorks() {
   else renderWorkTrigger()
   renderWorkList()
   if (typeof batchOnWorksLoaded === 'function') batchOnWorksLoaded()
+  if (typeof dlOnWorksLoaded === 'function') dlOnWorksLoaded()
+  if (typeof imOnWorksLoaded === 'function') imOnWorksLoaded()
 }
 
 function renderWorkTrigger() {
@@ -668,14 +673,13 @@ function renderWorkInfo() {
   }
   const last = latestChapter()
   const scheduled = state.chapters.filter((c) => c.state === 'scheduled').length
-  const early = state.chapters.filter((c) => c.state === 'early_access').length
   box.append(
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Último cap.' }),
       el('div', { class: 'stat-value', text: last ? `#${last.number}${last.volumeNumber != null ? ` · Vol. ${last.volumeNumber}` : ''}` : '—' })),
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Capítulos' }),
       el('div', { class: 'stat-value', text: formatNumber(state.chapters.length) })),
-    el('div', { class: 'stat', title: `${scheduled} programados · ${early} anticipados` }, el('div', { class: 'stat-label', text: 'Pendientes' }),
-      el('div', { class: 'stat-value', text: scheduled + early ? `${scheduled} prog. · ${early} ant.` : 'Ninguno' })),
+    el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Programados' }),
+      el('div', { class: 'stat-value', text: scheduled ? formatNumber(scheduled) : 'Ninguno' })),
   )
 }
 
@@ -994,17 +998,13 @@ function readForm() {
   const numRaw = $('#chNumber').value.trim()
   const volRaw = $('#chVolume').value.trim()
   const schedule = $('#scheduleToggle').checked
-  const early = $('#earlyToggle').checked
   const publishRaw = $('#publishAt').value
-  const releaseRaw = $('#releaseAt').value
   return {
     number: numRaw === '' ? null : Number(numRaw),
     volumeNumber: volRaw === '' ? null : Number(volRaw),
     title: $('#chTitle').value.trim(),
     publishAt: schedule && publishRaw ? new Date(publishRaw) : null,
     schedule,
-    earlyAccess: early,
-    releaseAt: early && releaseRaw ? new Date(releaseRaw) : null,
     notify: $('#notifyToggle').checked,
   }
 }
@@ -1053,16 +1053,6 @@ function validate() {
   else setHint('#publishHint', 'Máximo 1 año a futuro. Hora local de tu equipo.')
   $('#publishAt').classList.toggle('invalid', Boolean(errors.publish) && (show || Boolean(form.publishAt)))
 
-  if (form.earlyAccess && form.releaseAt) {
-    const base = form.publishAt ? form.publishAt.getTime() : now
-    if (form.releaseAt.getTime() <= now) errors.release = 'La fecha de liberación debe ser futura.'
-    else if (form.releaseAt.getTime() <= base) errors.release = 'Debe ser posterior a la fecha de publicación.'
-  }
-  if (errors.release) setHint('#releaseHint', errors.release, 'error')
-  else if (form.releaseAt) setHint('#releaseHint', `Se libera para todos ${relativeFromNow(form.releaseAt)} · ${formatDate(form.releaseAt)}`, 'ok')
-  else setHint('#releaseHint', 'Opcional. Si lo dejas vacío, quedará anticipado hasta liberarlo desde el panel.')
-  $('#releaseAt').classList.toggle('invalid', Boolean(errors.release))
-
   // Páginas
   if (!state.files.length) errors.files = 'Agrega las páginas del capítulo.'
   else if (state.files.some((f) => f.size > MAX_BYTES)) errors.files = 'Hay imágenes de más de 40 MB.'
@@ -1102,21 +1092,16 @@ function renderSummary(form, errors) {
   }
   sub.className = 'summary-sub'
   let when = form.publishAt ? `Programado: ${formatDate(form.publishAt)}` : 'Se publica al terminar la subida'
-  if (form.earlyAccess) when += form.releaseAt ? ` · Anticipado hasta ${formatDate(form.releaseAt)}` : ' · Anticipado (liberación manual)'
-  else if (!form.notify) when += ' · Sin avisos'
+  if (!form.notify) when += ' · Sin avisos'
   sub.textContent = when
 }
 
 function initForm() {
   const schedule = $('#scheduleToggle')
-  const early = $('#earlyToggle')
-  const notify = $('#notifyToggle')
-
   const refreshMins = () => {
     const min = toLocalInput(new Date(Date.now() + 2 * 60e3))
     $('#publishAt').min = min
     $('#publishAt').max = toLocalInput(new Date(Date.now() + 364 * 86400e3))
-    $('#releaseAt').min = $('#publishAt').value || min
   }
 
   schedule.addEventListener('change', () => {
@@ -1132,23 +1117,10 @@ function initForm() {
     validate()
   })
 
-  early.addEventListener('change', () => {
-    $('#earlyBox').hidden = !early.checked
-    refreshMins()
-    // La API no combina notify:false con earlyAccess (un anticipado siempre avisa).
-    notify.disabled = early.checked
-    if (early.checked) notify.checked = true
-    $('#notifyOption').classList.toggle('disabled', early.checked)
-    $('#notifyDesc').textContent = early.checked
-      ? 'Los capítulos anticipados siempre avisan a los seguidores.'
-      : 'Notificaciones, correos, webhooks y Discord. Apágalo para subir capítulos viejos en silencio.'
-    validate()
-  })
-
   $('#chNumber').addEventListener('input', () => { state.autoNumber = false; validate() })
   $('#chVolume').addEventListener('input', () => { state.autoVolume = false; validate() })
   $('#publishAt').addEventListener('input', () => { refreshMins(); validate() })
-  ;['#chTitle', '#releaseAt', '#notifyToggle'].forEach((s) => $(s).addEventListener('input', validate))
+  ;['#chTitle', '#notifyToggle'].forEach((s) => $(s).addEventListener('input', validate))
   $('#notifyToggle').addEventListener('change', validate)
   $('#scheduleToggle').addEventListener('focus', refreshMins)
   $('#resetBtn').addEventListener('click', () => (state.mode === 'batch' ? batchReset() : resetForm(true)))
@@ -1162,12 +1134,9 @@ function resetForm(full) {
   $('#chTitle').value = ''
   if (full) {
     $('#scheduleToggle').checked = false
-    $('#earlyToggle').checked = false
     $('#publishAt').value = ''
-    $('#releaseAt').value = ''
     $('#notifyToggle').checked = true
     $('#scheduleToggle').dispatchEvent(new Event('change'))
-    $('#earlyToggle').dispatchEvent(new Event('change'))
   }
   state.autoNumber = true
   state.autoVolume = true
@@ -1196,12 +1165,13 @@ function handleApiError(error, title) {
 function setUploadingUI(on) {
   state.uploading = on
   document.body.classList.toggle('uploading', on)
+  if (typeof setViewBusy === 'function') setViewBusy('upload', on)
   $('#progressWrap').hidden = !on
   $('#cancelBtn').hidden = !on
   $('#resetBtn').hidden = on
   $('#uploadBtn').disabled = on
   $('#uploadBtnText').textContent = on ? 'Subiendo…' : state.mode === 'batch' ? 'Subir capítulos' : 'Subir capítulo'
-  $$('.column-form input, .column-form button, .column-form select, #pagesToolbar button, #dropzone button, #batchToolbar button, #batchDrop button, #batchList input, #batchList button').forEach((n) => {
+  $$('[data-pane="upload"] .column-form input, [data-pane="upload"] .column-form button, [data-pane="upload"] .column-form select, #pagesToolbar button, #dropzone button, #batchToolbar button, #batchDrop button, #batchList input, #batchList button').forEach((n) => {
     if (on) { n.dataset.wasDisabled = n.disabled ? '1' : ''; n.disabled = true }
     else { n.disabled = n.dataset.wasDisabled === '1'; delete n.dataset.wasDisabled }
   })
@@ -1220,7 +1190,7 @@ async function startUpload() {
   const { ok, form, errors } = validate()
   if (!ok) {
     const first = Object.keys(errors)[0]
-    const focusMap = { work: '#workTrigger', number: '#chNumber', volume: '#chVolume', publish: '#publishAt', release: '#releaseAt', files: '#dropzone' }
+    const focusMap = { work: '#workTrigger', number: '#chNumber', volume: '#chVolume', publish: '#publishAt', files: '#dropzone' }
     if (errors.key) return openKeyModal()
     $(focusMap[first] || '#uploadBtn')?.focus()
     toast('warn', 'Revisa el formulario', errors[first])
@@ -1255,8 +1225,6 @@ async function startUpload() {
       title: form.title || null,
       volumeNumber: form.volumeNumber,
       publishAt: form.publishAt ? form.publishAt.toISOString() : null,
-      earlyAccess: form.earlyAccess,
-      releaseAt: form.releaseAt ? form.releaseAt.toISOString() : null,
       notify: form.notify,
       announcePage: announcePageFor(state.files),
     },
@@ -1305,7 +1273,6 @@ function showDone(chapter, form, work) {
   const fl = featuredLabel(state.files)
   lines.push(`${state.files.length} páginas${singles ? ` (${singles} simple${singles === 1 ? '' : 's'})` : ''}${fl ? ` · destacada ${fl.replace('★ ', '')}` : ''} · ${states[chapter.state] || chapter.state || 'Creado'}`)
   if (form.publishAt) lines.push(`Se publica el ${formatDate(form.publishAt)}`)
-  if (form.earlyAccess) lines.push(form.releaseAt ? `Libre para todos el ${formatDate(form.releaseAt)}` : 'Anticipado hasta liberarlo desde el panel')
   $('#doneTitle').textContent = form.publishAt ? '¡Capítulo programado!' : '¡Capítulo subido!'
   const text = $('#doneText')
   text.innerHTML = ''

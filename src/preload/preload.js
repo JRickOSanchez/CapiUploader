@@ -42,4 +42,32 @@ contextBridge.exposeInMainWorld('capi', {
       return () => ipcRenderer.removeListener('upload:progress', listener)
     },
   },
+  // Importar capítulos de otra web (motor de HaruNeko).
+  import: {
+    identify: (url) => invoke('import:identify', url),
+    open: (url, websiteId) => invoke('import:open', url, websiteId),
+    download: (payload) => invoke('import:download', payload),
+    cancel: () => invoke('import:cancel'),
+    release: (key) => invoke('import:release', key),
+    // Verificación de Cloudflare en el navegador del usuario: { status: 'open' | 'done' | 'error', site, browser, error }
+    onVerify: (cb) => ipcRenderer.on('import:verify', (_e, p) => cb(p)),
+    onProgress: (cb) => {
+      const listener = (_e, p) => cb(p)
+      ipcRenderer.on('import:progress', listener)
+      return () => ipcRenderer.removeListener('import:progress', listener)
+    },
+  },
+  // Descargar capítulos de las obras del scan activo.
+  download: {
+    folder: () => invoke('download:folder'),
+    pickFolder: () => invoke('download:pickFolder'),
+    start: (payload) => invoke('download:start', payload),
+    cancel: () => invoke('download:cancel'),
+    open: (dir) => invoke('download:open', dir),
+    onProgress: (cb) => {
+      const listener = (_e, p) => cb(p)
+      ipcRenderer.on('download:progress', listener)
+      return () => ipcRenderer.removeListener('download:progress', listener)
+    },
+  },
 })

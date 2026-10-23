@@ -3,11 +3,10 @@
 /* =========================================================
    Modo «Varios capítulos»
    Usa las utilidades y el estado globales de app.js.
-   Cada capítulo lleva su propia obra (del scan activo) y su propio acceso.
+   Cada capítulo lleva su propia obra (del scan activo).
    ========================================================= */
 const batch = {
   // { id, name, dir, parent, files, workId, workGuess, number, numberAuto, volume, volumeAuto, title,
-  //   access: 'public' | 'early-date' | 'early-manual', releaseAuto, releaseAt,
   //   status, progress, error, result, refs }
   items: [],
   seq: 0,
@@ -23,13 +22,6 @@ const LIMIT_IMAGES_PER_HOUR = 3000
 const ICON_GRIP = '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r=".8"/><circle cx="15" cy="6" r=".8"/><circle cx="9" cy="12" r=".8"/><circle cx="15" cy="12" r=".8"/><circle cx="9" cy="18" r=".8"/><circle cx="15" cy="18" r=".8"/></svg>'
 const ICON_PAGES = '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
 const ICON_BOOK = '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>'
-const ICON_UNDO = '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>'
-
-const ACCESS_LABEL = {
-  public: 'Público',
-  'early-date': 'Anticipado con fecha',
-  'early-manual': 'Anticipado sin fecha',
-}
 
 const sumSize = (files) => files.reduce((s, f) => s + f.size, 0)
 const UNIT_TEXT = {
@@ -41,7 +33,6 @@ const every = (n, unit) => (n === 1 ? `cada ${UNIT_TEXT[unit][0]}` : `cada ${amo
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 const workById = (id) => (id == null ? null : state.works.find((w) => w.id === id) || null)
-const isEarly = (it) => it.access === 'early-date' || it.access === 'early-manual'
 const pendingItems = () => batch.items.filter((i) => i.status !== 'done')
 
 /* ---------- Detección de número, tomo y título ---------- */
@@ -188,16 +179,16 @@ async function addChapterPaths(paths) {
   addChapters(res.data)
 }
 
-async function addChapters({ chapters, skipped, looseFiles, psd }) {
+/** opts.workId fija la obra de todos los capítulos (p. ej. al venir de «Importar de web»). */
+async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
   const known = new Set(batch.items.map((i) => i.dir))
   const fresh = chapters.filter((c) => !known.has(c.dir))
   const dupes = chapters.length - fresh.length
-  const access = $('#batchAccessDefault').value
   const guesses = new Map() // carpeta → obra adivinada sin seguridad
 
   const items = fresh.map((c) => {
     const p = parseChapterName(c.name)
-    const match = matchWork(c.parent)
+    const match = opts.workId != null ? null : matchWork(c.parent)
     if (match && !match.sure) guesses.set(c.parent, match.work.title)
     return {
       id: ++batch.seq,
@@ -205,16 +196,13 @@ async function addChapters({ chapters, skipped, looseFiles, psd }) {
       dir: c.dir,
       parent: c.parent || '',
       files: c.files.map((f) => ({ ...f, id: ++fileSeq, status: null })),
-      workId: match?.work.id ?? state.selectedWork?.id ?? null,
+      workId: opts.workId ?? match?.work.id ?? state.selectedWork?.id ?? null,
       workGuess: Boolean(match),
       number: p.number,
       numberAuto: p.number == null,
       volume: p.volume,
       volumeAuto: p.volume == null,
       title: p.title,
-      access,
-      releaseAuto: true,
-      releaseAt: null,
       status: 'pending',
       progress: 0,
       error: '',
@@ -335,7 +323,7 @@ function groupedItems() {
   return order.map((k) => ({ workId: k === 'none' ? null : k, items: map.get(k) }))
 }
 
-/* ---------- Programación y acceso ---------- */
+/* ---------- Programación ---------- */
 
 function schedulePlan() {
   const schedule = $('#scheduleToggle').checked
@@ -343,10 +331,6 @@ function schedulePlan() {
   const intervalVal = Math.max(0, Number($('#batchInterval').value) || 0)
   const unit = $('#batchIntervalUnit').value
   const step = intervalVal * UNIT_MS[unit]
-  const relRaw = $('#batchReleaseVal').value.trim()
-  const relVal = relRaw === '' ? null : Number(relRaw)
-  const relUnit = $('#batchReleaseUnit').value
-  const releaseOffset = relVal > 0 ? relVal * UNIT_MS[relUnit] : null
 
   // Cada obra lleva su propia secuencia: Kirara 20, 21, 22 · Wistoria 20, 21…
   const groups = groupedItems()
@@ -356,18 +340,12 @@ function schedulePlan() {
     let k = 0
     for (const it of g.items) {
       if (it.status === 'done') continue
-      const publishAt = base ? new Date(base.getTime() + k * step) : null
-      let releaseAt = null
-      if (it.access === 'early-date') {
-        if (!it.releaseAuto) releaseAt = it.releaseAt
-        else if (releaseOffset) releaseAt = new Date((publishAt ? publishAt.getTime() : Date.now()) + releaseOffset)
-      }
-      map.set(it.id, { publishAt, releaseAt })
+      map.set(it.id, { publishAt: base ? new Date(base.getTime() + k * step) : null })
       k++
     }
   }
   return {
-    schedule, base, step, intervalVal, unit, relVal, relUnit, releaseOffset, queue, map,
+    schedule, base, step, intervalVal, unit, queue, map,
     notify: $('#notifyToggle').checked,
   }
 }
@@ -376,24 +354,7 @@ function whenText(it, plan) {
   if (it.status === 'done') return ''
   const s = plan.map.get(it.id)
   if (!s) return ''
-  let t = s.publishAt ? `Publica ${formatDate(s.publishAt)}` : 'Publica al subirse'
-  if (it.access === 'early-manual') t += ' · solo suscriptores'
-  else if (it.access === 'early-date') {
-    if (!it.releaseAuto) t += it.releaseAt ? ` · libre ${formatDate(it.releaseAt)}` : ''
-    else if (!s.publishAt && plan.releaseOffset) t += ` · libre ${amount(plan.relVal, plan.relUnit)} después de subirse`
-    else if (s.releaseAt) t += ` · libre ${formatDate(s.releaseAt)}`
-  }
-  return t
-}
-
-/** Pone en su fila la fecha sugerida mientras no se haya editado a mano. */
-function syncReleaseInputs(plan) {
-  for (const it of batch.items) {
-    if (!it.refs?.release || it.access !== 'early-date' || !it.releaseAuto) continue
-    const s = plan.map.get(it.id)
-    const v = s?.releaseAt ? toLocalInput(s.releaseAt) : ''
-    if (it.refs.release.value !== v) it.refs.release.value = v
-  }
+  return s.publishAt ? `Publica ${formatDate(s.publishAt)}` : 'Publica al subirse'
 }
 
 /* ---------- Validación ---------- */
@@ -435,7 +396,6 @@ function batchValidate() {
   }
 
   let bad = 0
-  let needOffset = false
   for (const it of batch.items) {
     let err = ''
     let always = false // errores que se muestran aunque aún no se intente subir
@@ -451,12 +411,6 @@ function batchValidate() {
       else if (it.files.length > MAX_PAGES) { err = `Tiene ${it.files.length} páginas (máximo ${MAX_PAGES}).`; always = true }
       else if (it.files.some((f) => f.size > MAX_BYTES)) { err = 'Tiene imágenes de más de 40 MB.'; always = true }
       else if (s.publishAt && s.publishAt.getTime() > now + YEAR_MS) { err = 'Su fecha de publicación queda a más de 1 año (máximo de la API).'; always = true }
-      else if (it.access === 'early-date') {
-        if (it.releaseAuto && !plan.releaseOffset) { needOffset = true; err = 'Indica la fecha de liberación o en cuánto tiempo se libera.' }
-        else if (!it.releaseAuto && !it.releaseAt) err = 'Elige la fecha de liberación.'
-        else if (s.releaseAt && s.releaseAt.getTime() <= now + 60e3) { err = 'La fecha de liberación debe ser futura.'; always = true }
-        else if (s.releaseAt && s.publishAt && s.releaseAt <= s.publishAt) { err = 'Debe liberarse después de su publicación.'; always = true }
-      }
     }
     if (err) bad++
     if (it.refs) {
@@ -464,11 +418,9 @@ function batchValidate() {
       it.refs.row.classList.toggle('invalid', Boolean(visible))
       it.refs.error.textContent = visible ? err : it.status === 'error' ? it.error : ''
       it.refs.when.textContent = whenText(it, plan)
-      if (it.refs.release) it.refs.release.classList.toggle('invalid', Boolean(visible) && it.access === 'early-date' && /liber/.test(err))
     }
   }
   if (bad) errors.rows = bad === 1 ? 'Un capítulo tiene datos por corregir.' : `${bad} capítulos tienen datos por corregir.`
-  syncReleaseInputs(plan)
 
   // Fecha del primer capítulo (de cada obra)
   let publishMsg = ''
@@ -484,13 +436,6 @@ function batchValidate() {
   setHint('#publishHint', errors.publish || publishMsg || 'Máximo 1 año a futuro. Hora local de tu equipo.',
     errors.publish ? 'error' : publishMsg ? 'ok' : '')
   $('#publishAt').classList.toggle('invalid', Boolean(errors.publish) && (show || Boolean(plan.base)))
-
-  if (plan.relVal != null && !(plan.relVal > 0)) errors.release = 'El tiempo para liberar debe ser mayor que 0.'
-  setHint('#batchReleaseHint', errors.release ||
-    (needOffset ? 'Hay anticipados con fecha automática: indica en cuánto tiempo se liberan.' :
-      plan.releaseOffset ? `Sugerida: ${amount(plan.relVal, plan.relUnit)} después de publicarse. Cámbiala en cada fila si quieres otra.` : 'Se usa en los anticipados con fecha mientras no la cambies a mano en su fila.'),
-  errors.release || needOffset ? 'error' : plan.releaseOffset ? 'ok' : '')
-  $('#batchReleaseVal').classList.toggle('invalid', Boolean(errors.release) || (needOffset && show))
 
   const p = typeof activeProfile === 'function' ? activeProfile() : null
   if ((state.me && !state.me.key.scopes.includes('chapters:write')) || (p && !canWrite(p))) errors.scope = 'La clave de este scan no tiene el permiso chapters:write.'
@@ -521,8 +466,6 @@ function renderBatchSummary(plan, errors) {
   else if (workIds.size > 1) parts.push(plural(workIds.size, 'obra', 'obras'))
   if (queue.length) {
     parts.push(plural(queue.length, 'capítulo', 'capítulos'))
-    const early = queue.filter(isEarly).length
-    if (early) parts.push(`${queue.length - early} públicos · ${early} anticipados`)
     parts.push(`${formatNumber(pages)} pág.`)
   }
   main.textContent = parts.filter(Boolean).length ? parts.filter(Boolean).join(' · ') : 'Agrega las carpetas de los capítulos'
@@ -537,7 +480,7 @@ function renderBatchSummary(plan, errors) {
   let t = plan.schedule && plan.base
     ? `Programados desde ${formatDate(plan.base)}${queue.length > 1 ? (plan.step ? ` · uno ${every(plan.intervalVal, plan.unit)} por obra` : ' · todos a la vez') : ''}`
     : 'Se publican conforme terminan de subirse'
-  if (!plan.notify && queue.some((i) => !isEarly(i))) t += ' · Públicos sin avisos'
+  if (!plan.notify) t += ' · Sin avisos'
   if (queue.length > LIMIT_CHAPTERS_PER_HOUR || pages > LIMIT_IMAGES_PER_HOUR) {
     t += ` · Ojo: supera el límite por hora del scan (${LIMIT_CHAPTERS_PER_HOUR} capítulos / ${formatNumber(LIMIT_IMAGES_PER_HOUR)} imágenes)`
   }
@@ -566,39 +509,6 @@ function updateRowStatus(it) {
   if (it.status === 'error') it.refs.error.textContent = it.error
 }
 
-function accessControls(it, locked) {
-  const select = el('select', {
-    class: `ch-access-select access-${it.access}`, disabled: locked, title: 'Acceso del capítulo',
-    onchange: (e) => {
-      it.access = e.target.value
-      renderBatch()
-      batchValidate()
-    },
-  }, Object.entries(ACCESS_LABEL).map(([v, label]) => el('option', { value: v, selected: it.access === v, text: label })))
-
-  let release = null
-  let reset = null
-  if (it.access === 'early-date') {
-    release = el('input', {
-      type: 'datetime-local', class: `ch-release${it.releaseAuto ? ' auto' : ''}`, disabled: locked,
-      title: it.releaseAuto ? 'Fecha sugerida. Cámbiala para fijar otra.' : 'Fecha de liberación elegida a mano',
-      min: toLocalInput(new Date(Date.now() + 2 * 60e3)),
-      oninput: (e) => {
-        it.releaseAuto = false
-        it.releaseAt = e.target.value ? new Date(e.target.value) : null
-        e.target.classList.remove('auto')
-        if (it.refs.reset) it.refs.reset.hidden = false
-        batchValidate()
-      },
-    })
-    reset = el('button', {
-      type: 'button', class: 'icon-btn small ghost', title: 'Volver a la fecha sugerida', html: ICON_UNDO, hidden: it.releaseAuto || locked,
-      onclick: () => { it.releaseAuto = true; it.releaseAt = null; renderBatch(); batchValidate() },
-    })
-  }
-  return { node: el('div', { class: 'ch-access' }, select, release, reset), release, reset }
-}
-
 function chapterRow(it) {
   const locked = state.uploading || it.status === 'done'
   const total = sumSize(it.files)
@@ -616,7 +526,6 @@ function chapterRow(it) {
     type: 'text', maxlength: '256', placeholder: 'Título (opcional)', value: it.title, disabled: locked,
     oninput: (e) => { it.title = e.target.value.trim() },
   })
-  const access = accessControls(it, locked)
   const when = el('span', { class: 'when' })
   const error = el('div', { class: 'ch-error' })
   const status = el('span', {
@@ -626,7 +535,7 @@ function chapterRow(it) {
   const progress = el('div')
   const handle = el('div', { class: 'ch-handle', html: ICON_GRIP, title: 'Arrastra para reordenar dentro de la obra' })
 
-  const row = el('li', { class: `chrow${isEarly(it) ? ' early' : ''}`, dataset: { id: it.id, status: it.status } },
+  const row = el('li', { class: 'chrow', dataset: { id: it.id, status: it.status } },
     handle,
     el('div', { class: 'ch-cover', title: 'Ver páginas', onclick: () => openPagesModal(it) },
       it.files[0] ? el('img', { src: it.files[0].url, alt: '', loading: 'lazy', decoding: 'async' }) : null,
@@ -636,7 +545,6 @@ function chapterRow(it) {
         el('label', { class: 'ch-field' }, el('span', { class: 'pre', text: 'Cap' }), num),
         el('label', { class: 'ch-field' }, el('span', { class: 'pre', text: 'Vol' }), vol),
         title),
-      access.node,
       el('div', { class: 'ch-meta' },
         el('span', { class: 'folder', text: `📁 ${it.name}`, title: it.dir }),
         el('span', { class: 'sep' }),
@@ -659,7 +567,7 @@ function chapterRow(it) {
   handle.addEventListener('mousedown', () => { if (!locked) row.draggable = true })
   row.addEventListener('dragend', () => { row.draggable = false })
 
-  it.refs = { row, num, vol, when, error, status, progress, release: access.release, reset: access.reset }
+  it.refs = { row, num, vol, when, error, status, progress }
   updateRowStatus(it)
   return row
 }
@@ -669,12 +577,10 @@ function groupHeader(g) {
   const pending = g.items.filter((i) => i.status !== 'done')
   const nums = g.items.map((i) => i.number).filter((n) => n != null && !Number.isNaN(n))
   const last = workLatest(g.workId)
-  const early = pending.filter(isEarly).length
   const guessed = g.items.some((i) => i.workGuess)
   const meta = [
     plural(g.items.length, 'capítulo', 'capítulos'),
     nums.length ? (nums.length > 1 ? `#${Math.min(...nums)}–${Math.max(...nums)}` : `#${nums[0]}`) : null,
-    early ? `${early} anticipado${early === 1 ? '' : 's'}` : null,
     work ? (last ? `último publicado #${last.number}` : 'sin capítulos publicados') : null,
   ].filter(Boolean).join(' · ')
 
@@ -728,6 +634,7 @@ function renderBatch() {
 
 let pickerTargets = []
 let pickerIndex = 0
+let pickerOnPick = null // otro uso del selector (p. ej. «Importar de web»)
 
 function pickerWorks() {
   const q = normTitle($('#workPickerSearch').value)
@@ -756,9 +663,10 @@ function renderWorkPicker() {
   })
 }
 
-function openWorkPicker(anchor, items) {
-  if (state.uploading) return
+function openWorkPicker(anchor, items, onPick = null) {
+  if (state.uploading && !onPick) return
   pickerTargets = items
+  pickerOnPick = onPick
   pickerIndex = 0
   const pop = $('#workPicker')
   $('#workPickerSearch').value = ''
@@ -778,11 +686,14 @@ function openWorkPicker(anchor, items) {
 function closeWorkPicker() {
   $('#workPicker').hidden = true
   pickerTargets = []
+  pickerOnPick = null
 }
 
 async function choosePickerWork(work) {
   const items = pickerTargets
+  const onPick = pickerOnPick
   closeWorkPicker()
+  if (onPick) return onPick(work)
   const moved = items.filter((i) => i.status !== 'done' && i.workId !== work.id).length
   await assignWork(items, work)
   if (moved) toast('success', `${plural(moved, 'capítulo', 'capítulos')} en «${work.title}»`)
@@ -1007,54 +918,6 @@ function initBatchDrop() {
   $('#batchClearBtn').addEventListener('click', batchReset)
 }
 
-/* ---------- Acceso: acciones rápidas ---------- */
-
-function earlyDefault() {
-  const v = $('#batchAccessDefault').value
-  return v === 'early-manual' ? 'early-manual' : 'early-date'
-}
-
-function setAccess(items, access) {
-  let n = 0
-  for (const it of items) {
-    if (it.status === 'done' || it.access === access) continue
-    it.access = access
-    n++
-  }
-  renderBatch()
-  batchValidate()
-  return n
-}
-
-function initAccessActions() {
-  $('#accAllPublic').addEventListener('click', () => {
-    setAccess(pendingItems(), 'public')
-    toast('success', 'Todos los capítulos quedaron públicos')
-  })
-  $('#accAllEarly').addEventListener('click', () => {
-    const access = earlyDefault()
-    setAccess(pendingItems(), access)
-    toast('success', 'Todos los capítulos quedaron anticipados', access === 'early-manual' ? 'Sin fecha: solo suscriptores.' : 'Con la fecha de liberación sugerida.')
-  })
-  $('#accLastBtn').addEventListener('click', () => {
-    const n = Math.floor(Number($('#accLastN').value))
-    if (!(n >= 1)) { $('#accLastN').focus(); return toast('warn', 'Indica cuántos capítulos') }
-    const access = earlyDefault()
-    let early = 0
-    for (const g of groupedItems()) {
-      const pend = g.items.filter((i) => i.status !== 'done')
-      const newest = new Set([...pend].sort((a, b) => (b.number ?? -Infinity) - (a.number ?? -Infinity)).slice(0, n))
-      for (const it of pend) {
-        it.access = newest.has(it) ? access : 'public'
-        if (newest.has(it)) early++
-      }
-    }
-    renderBatch()
-    batchValidate()
-    toast('success', `${plural(early, 'capítulo anticipado', 'capítulos anticipados')}`, `Los ${n === 1 ? 'más nuevos' : `${n} más nuevos`} de cada obra; el resto, públicos.`)
-  })
-}
-
 /* ---------- Subida en cola ---------- */
 
 async function batchStart() {
@@ -1066,7 +929,6 @@ async function batchStart() {
     toast('warn', 'Revisa el formulario', v.errors[first])
     if (first === 'rows') $('.chrow.invalid')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     else if (first === 'publish') $('#publishAt').focus()
-    else if (first === 'release') $('#batchReleaseVal').focus()
     return
   }
 
@@ -1119,9 +981,6 @@ async function batchStart() {
     $('#summarySub').textContent = `${ok} subidos${failed ? ` · ${failed} con error` : ''} · quedan ${queue.length - pos}`
 
     const sched = plan.map.get(it.id) || {}
-    // Fecha automática sin programar: se calcula al momento de subir.
-    let releaseAt = sched.releaseAt
-    if (it.access === 'early-date' && it.releaseAuto && !sched.publishAt && plan.releaseOffset) releaseAt = new Date(Date.now() + plan.releaseOffset)
     const res = await window.capi.upload.start({
       workId: work.id,
       files: it.files.map((f) => ({ path: f.path, single: Boolean(f.single) })),
@@ -1130,8 +989,6 @@ async function batchStart() {
         title: it.title || null,
         volumeNumber: it.volume,
         publishAt: sched.publishAt ? sched.publishAt.toISOString() : null,
-        earlyAccess: isEarly(it),
-        releaseAt: it.access === 'early-date' && releaseAt ? releaseAt.toISOString() : null,
         notify: plan.notify,
         announcePage: announcePageFor(it.files),
       },
@@ -1184,10 +1041,10 @@ async function batchStart() {
     toast('info', 'Subida cancelada', 'Las páginas ya subidas se reutilizarán si vuelves a intentarlo pronto.')
     return
   }
-  showBatchDone(plan, perWork, { ok, failed, pending, early: queue.filter((i) => i.status === 'done' && isEarly(i)).length })
+  showBatchDone(plan, perWork, { ok, failed, pending })
 }
 
-function showBatchDone(plan, perWork, { ok, failed, pending, early }) {
+function showBatchDone(plan, perWork, { ok, failed, pending }) {
   const mark = $('#doneModal .success-mark')
   const clean = !failed && !pending
   mark.classList.toggle('warn', !clean)
@@ -1200,7 +1057,6 @@ function showBatchDone(plan, perWork, { ok, failed, pending, early }) {
     lines.push(`«${workById(workId)?.title || 'Obra'}»: ${t.ok} subido${t.ok === 1 ? '' : 's'}${t.failed ? ` · ${t.failed} con error` : ''}`)
   }
   const parts = [`${ok} subido${ok === 1 ? '' : 's'}`]
-  if (early) parts.push(`${early} anticipado${early === 1 ? '' : 's'}`)
   if (failed) parts.push(`${failed} con error`)
   if (pending) parts.push(`${pending} sin subir`)
   lines.push(parts.join(' · '))
@@ -1221,18 +1077,6 @@ function showBatchDone(plan, perWork, { ok, failed, pending, early }) {
 
 /* ---------- Modo ---------- */
 
-/** En «Varios capítulos» el aviso solo aplica a los públicos (los anticipados siempre avisan). */
-function syncNotifyForMode() {
-  const notify = $('#notifyToggle')
-  if (state.mode === 'batch') {
-    notify.disabled = false
-    $('#notifyOption').classList.remove('disabled')
-    $('#notifyDesc').textContent = 'Solo para los capítulos públicos: los anticipados siempre avisan. Apágalo para subir capítulos viejos en silencio.'
-  } else {
-    $('#earlyToggle').dispatchEvent(new Event('change'))
-  }
-}
-
 function setMode(mode) {
   if (state.uploading) return
   state.mode = mode === 'batch' ? 'batch' : 'single'
@@ -1241,7 +1085,6 @@ function setMode(mode) {
   $$('#modeSwitch button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === state.mode)))
   $('#uploadBtnText').textContent = state.mode === 'batch' ? 'Subir capítulos' : 'Subir capítulo'
   state.attempted = false
-  syncNotifyForMode()
   validate()
 }
 
@@ -1249,7 +1092,6 @@ function initBatch() {
   initBatchDrop()
   initPagesModal()
   initWorkPicker()
-  initAccessActions()
   $$('#modeSwitch button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)))
 
   $('#batchVolume').addEventListener('input', () => { batch.volumeAuto = false; batchValidate() })
@@ -1278,12 +1120,9 @@ function initBatch() {
     batchValidate()
     if (count) toast('success', 'Capítulos renumerados', `Cada obra empieza en el ${start}, en el orden de la lista.`)
   })
-  ;['#batchInterval', '#batchReleaseVal'].forEach((s) => $(s).addEventListener('input', () => validate()))
-  ;['#batchIntervalUnit', '#batchReleaseUnit'].forEach((s) => $(s).addEventListener('change', () => validate()))
-  ;['#scheduleToggle', '#earlyToggle'].forEach((s) => $(s).addEventListener('change', () => {
-    if (state.mode === 'batch') syncNotifyForMode()
-    validate()
-  }))
+  $('#batchInterval').addEventListener('input', () => validate())
+  $('#batchIntervalUnit').addEventListener('change', () => validate())
+  $('#scheduleToggle').addEventListener('change', () => validate())
 
   $('#cancelBtn').addEventListener('click', () => { if (state.mode === 'batch') batch.cancelled = true })
   // Al cerrar el resumen, el modal vuelve a su forma de «un capítulo».

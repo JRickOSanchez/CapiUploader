@@ -20,6 +20,18 @@
       </div>
     </div>
 
+    <nav class="view-tabs" id="viewTabs" role="tablist" aria-label="Sección">
+      <button type="button" role="tab" data-view="upload">
+        <svg viewBox="0 0 24 24"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg>Subir
+      </button>
+      <button type="button" role="tab" data-view="import">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Importar de web
+      </button>
+      <button type="button" role="tab" data-view="download">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-6-6m6 6 6-6"/></svg>Descargar
+      </button>
+    </nav>
+
     <div class="topbar-actions">
       <div class="scan-menu" id="scanMenuWrap">
         <button class="scan-chip" id="scanChip" type="button" title="Cambiar de scan" aria-haspopup="menu" aria-expanded="false">
@@ -57,7 +69,7 @@
     </div>
   </header>
 
-  <main class="layout">
+  <main class="layout" data-pane="upload">
     <!-- ===== Columna izquierda: formulario ===== -->
     <section class="column column-form">
       <!-- Encabezado -->
@@ -176,7 +188,7 @@
           <span class="step">3</span>
           <div>
             <h2><span class="hl">Publicación</span></h2>
-            <p class="muted">Cuándo y para quién estará disponible.</p>
+            <p class="muted">Cuándo se publica y a quién se avisa.</p>
           </div>
         </div>
 
@@ -205,65 +217,6 @@
               </select>
             </div>
             <span class="hint">Con 0 se publican todos a la misma hora.</span>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="option single-only">
-          <div class="option-text">
-            <span class="option-title">Lectura anticipada <span class="badge accent">Early access</span></span>
-            <span class="option-desc">Solo lo leen quienes tienen suscripción o plan hasta que se libere.</span>
-          </div>
-          <label class="switch"><input type="checkbox" id="earlyToggle" /><span></span></label>
-        </div>
-        <div class="reveal single-only" id="earlyBox" hidden>
-          <label class="field">
-            <span class="label">Liberar para todos el</span>
-            <input type="datetime-local" id="releaseAt" />
-            <span class="hint" id="releaseHint">Opcional. Si lo dejas vacío, quedará anticipado hasta liberarlo desde el panel.</span>
-          </label>
-        </div>
-
-        <!-- Acceso por capítulo (varios capítulos) -->
-        <div class="batch-only access-block">
-          <div class="option-text">
-            <span class="option-title">Acceso de cada capítulo <span class="badge accent">Early access</span></span>
-            <span class="option-desc">Cada capítulo elige en su fila si es público o anticipado y cuándo se libera.</span>
-          </div>
-          <label class="field">
-            <span class="label">Acceso para capítulos nuevos</span>
-            <select id="batchAccessDefault">
-              <option value="public" selected>Público</option>
-              <option value="early-date">Anticipado, con fecha de liberación</option>
-              <option value="early-manual">Anticipado, solo suscriptores (sin fecha)</option>
-            </select>
-          </label>
-          <div class="field">
-            <span class="label">Aplicar a la lista</span>
-            <div class="access-actions">
-              <button type="button" class="btn secondary small" id="accAllPublic">Todos públicos</button>
-              <button type="button" class="btn secondary small" id="accAllEarly">Todos anticipados</button>
-            </div>
-            <div class="inline">
-              <span class="inline-text">Anticipados los últimos</span>
-              <input type="number" id="accLastN" min="1" step="1" value="1" />
-              <span class="inline-text">de cada obra</span>
-              <button type="button" class="btn secondary" id="accLastBtn">Aplicar</button>
-            </div>
-          </div>
-          <div class="field">
-            <span class="label">Fecha de liberación sugerida</span>
-            <div class="inline">
-              <input type="number" id="batchReleaseVal" min="1" step="1" value="7" />
-              <select id="batchReleaseUnit">
-                <option value="hours">horas</option>
-                <option value="days" selected>días</option>
-                <option value="weeks">semanas</option>
-              </select>
-              <span class="inline-text">después de publicarse</span>
-            </div>
-            <span class="hint" id="batchReleaseHint">Se usa en los anticipados con fecha mientras no la cambies a mano en su fila.</span>
           </div>
         </div>
 
@@ -381,7 +334,7 @@
   </main>
 
   <!-- ===== Barra de acción ===== -->
-  <footer class="actionbar">
+  <footer class="actionbar" data-pane="upload">
     <div class="summary" id="summary">
       <span class="summary-main" id="summaryMain">Completa el formulario para subir</span>
       <span class="summary-sub" id="summarySub"></span>
@@ -396,6 +349,226 @@
       <button type="button" class="btn primary lg" id="uploadBtn" disabled>
         <svg viewBox="0 0 24 24"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg>
         <span id="uploadBtnText">Subir capítulo</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- ===== Importar de web ===== -->
+  <main class="layout" data-pane="import" hidden>
+    <section class="column column-form">
+      <div class="hero">
+        <h1>Importar de <span class="hl">web</span></h1>
+        <p>Trae los capítulos de tu obra desde otra web de manga y súbelos a Capibara.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="step">1</span>
+          <div>
+            <h2>Enlace de la <span class="hl">obra</span></h2>
+            <p class="muted">La página de la obra en la otra web, la que tiene la lista de capítulos.</p>
+          </div>
+        </div>
+        <div class="inline">
+          <input type="text" id="imUrl" placeholder="https://otraweb.com/manga/mi-obra/" autocomplete="off" spellcheck="false" />
+          <button type="button" class="btn primary" id="imSearch">Buscar</button>
+        </div>
+        <span class="hint" id="imUrlHint"></span>
+        <div class="im-site" id="imSite" hidden></div>
+        <p class="hint" id="imCatalog">Compatible con más de 800 webs gracias al motor de HaruNeko, y con webs hechas con los temas Madara o MangaStream.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="step">2</span>
+          <div>
+            <h2>Obra en <span class="hl">Capibara</span></h2>
+            <p class="muted">Los capítulos se agregan a una obra que ya existe en tu scan.</p>
+          </div>
+        </div>
+        <div class="im-target" id="imTarget">
+          <p class="muted">Busca la obra para elegir a cuál de tus obras van los capítulos.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="step">3</span>
+          <div>
+            <h2>Antes de <span class="hl">importar</span></h2>
+            <p class="muted">Al terminar, los capítulos pasan a «Subir · Varios capítulos» para que los revises antes de subirlos.</p>
+          </div>
+        </div>
+        <div class="field">
+          <span class="label">Programarlos uno cada</span>
+          <div class="inline">
+            <input type="number" id="imInterval" min="0" step="1" value="10" />
+            <select id="imIntervalUnit">
+              <option value="minutes" selected>minutos</option>
+              <option value="hours">horas</option>
+              <option value="days">días</option>
+            </select>
+          </div>
+          <span class="hint">Escalonar la publicación evita saturar la subida. Con 0 se publican conforme se suben.</span>
+        </div>
+        <label class="im-confirm">
+          <input type="checkbox" id="imConfirm" />
+          <span>Confirmo que este contenido es de mi scan y que tengo derecho a publicarlo.</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="column column-pages">
+      <div class="card pages-card">
+        <div class="card-head">
+          <span class="step">4</span>
+          <div>
+            <h2><span class="hl">Capítulos</span> de la web <span class="badge" id="imCount">0</span></h2>
+            <p class="muted" id="imListSummary">Busca una obra para ver sus capítulos.</p>
+          </div>
+        </div>
+        <div class="toolbar list-tools" id="imToolbar" hidden>
+          <select id="imLang" class="im-lang" title="Idioma de los capítulos" hidden></select>
+          <select id="imGroup" class="im-lang im-group" title="Scan que subió cada versión del capítulo" hidden></select>
+          <button type="button" class="btn ghost small" id="imMissing" title="Marcar los que aún no están en Capibara">Los que faltan</button>
+          <button type="button" class="btn ghost small" id="imAll">Todos</button>
+          <button type="button" class="btn ghost small" id="imNone">Ninguno</button>
+          <div class="dl-range">
+            <span class="inline-text">Del</span>
+            <input type="number" id="imFrom" step="any" min="0" />
+            <span class="inline-text">al</span>
+            <input type="number" id="imTo" step="any" min="0" />
+            <button type="button" class="btn secondary small" id="imRange">Marcar</button>
+          </div>
+        </div>
+        <div class="dl-body">
+          <div class="dz-empty" id="imEmpty">
+            <div class="dz-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+            </div>
+            <p class="dz-title" id="imEmptyTitle">Pega el enlace de una obra</p>
+            <p class="dz-sub" id="imEmptySub">Sus capítulos aparecerán aquí para elegir cuáles traer.</p>
+          </div>
+          <ol class="dl-list" id="imList" hidden></ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="actionbar" data-pane="import" hidden>
+    <div class="summary">
+      <span class="summary-main" id="imSummaryMain">Pega el enlace de una obra</span>
+      <span class="summary-sub" id="imSummarySub"></span>
+    </div>
+    <div class="progress-wrap" id="imProgressWrap" hidden>
+      <div class="progress-label"><span id="imProgressText">Preparando…</span><span id="imProgressPct">0%</span></div>
+      <div class="progress"><div class="progress-bar" id="imProgressBar"></div></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn danger-solid" id="imCancelBtn" hidden>Cancelar</button>
+      <button type="button" class="btn primary lg" id="imStartBtn" disabled>
+        <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-6-6m6 6 6-6"/></svg>
+        <span id="imStartText">Importar</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- ===== Descargar de Capibara ===== -->
+  <main class="layout" data-pane="download" hidden>
+    <section class="column column-form">
+      <div class="hero">
+        <h1>Descargar <span class="hl">capítulos</span></h1>
+        <p>Baja las páginas de las obras de tu scan para respaldarlas o editarlas.</p>
+      </div>
+
+      <div class="card dl-works-card">
+        <div class="card-head">
+          <span class="step">1</span>
+          <div>
+            <h2>Elige la <span class="hl">obra</span></h2>
+            <p class="muted">Obras del scan activo.</p>
+          </div>
+        </div>
+        <div class="combo-search dl-search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="text" id="dlWorkSearch" placeholder="Buscar obra…" autocomplete="off" spellcheck="false" />
+        </div>
+        <ul class="combo-list dl-work-list" id="dlWorkList" role="listbox"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="step">2</span>
+          <div>
+            <h2><span class="hl">Destino</span></h2>
+            <p class="muted">Cada capítulo queda en «Obra / Cap 12 - Título», listo para volver a subirlo con «Varios capítulos».</p>
+          </div>
+        </div>
+        <div class="dl-dest">
+          <span class="dl-dest-path" id="dlDest" title=""></span>
+          <button type="button" class="btn secondary small" id="dlPickDest">Cambiar</button>
+        </div>
+        <label class="field dl-format">
+          <span class="label">Formato de las páginas</span>
+          <select id="dlFormat">
+            <option value="jpg" selected>JPG (calidad 92) — recomendado</option>
+            <option value="png">PNG — sin pérdida, más pesado</option>
+            <option value="original">Original de Capibara (WEBP)</option>
+          </select>
+        </label>
+        <p class="hint">Los capítulos que ya estén completos en esa carpeta y formato se saltan.</p>
+      </div>
+    </section>
+
+    <section class="column column-pages">
+      <div class="card pages-card">
+        <div class="card-head">
+          <span class="step">3</span>
+          <div>
+            <h2><span class="hl">Capítulos</span> <span class="badge" id="dlCount">0</span></h2>
+            <p class="muted" id="dlListSummary">Elige una obra para ver sus capítulos.</p>
+          </div>
+        </div>
+        <div class="toolbar list-tools" id="dlToolbar" hidden>
+          <button type="button" class="btn ghost small" id="dlAll">Todos</button>
+          <button type="button" class="btn ghost small" id="dlNone">Ninguno</button>
+          <div class="dl-range">
+            <span class="inline-text">Del</span>
+            <input type="number" id="dlFrom" step="any" min="0" />
+            <span class="inline-text">al</span>
+            <input type="number" id="dlTo" step="any" min="0" />
+            <button type="button" class="btn secondary small" id="dlRange">Marcar</button>
+          </div>
+        </div>
+        <div class="dl-body">
+          <div class="dz-empty" id="dlEmpty">
+            <div class="dz-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-6-6m6 6 6-6"/></svg>
+            </div>
+            <p class="dz-title" id="dlEmptyTitle">Elige una obra</p>
+            <p class="dz-sub" id="dlEmptySub">Sus capítulos aparecerán aquí para marcar cuáles descargar.</p>
+          </div>
+          <ol class="dl-list" id="dlList" hidden></ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="actionbar" data-pane="download" hidden>
+    <div class="summary">
+      <span class="summary-main" id="dlSummaryMain">Elige una obra y sus capítulos</span>
+      <span class="summary-sub" id="dlSummarySub"></span>
+    </div>
+    <div class="progress-wrap" id="dlProgressWrap" hidden>
+      <div class="progress-label"><span id="dlProgressText">Preparando…</span><span id="dlProgressPct">0%</span></div>
+      <div class="progress"><div class="progress-bar" id="dlProgressBar"></div></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="dlOpenBtn" hidden>Abrir carpeta</button>
+      <button type="button" class="btn danger-solid" id="dlCancelBtn" hidden>Cancelar</button>
+      <button type="button" class="btn primary lg" id="dlStartBtn" disabled>
+        <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-6-6m6 6 6-6"/></svg>
+        <span id="dlStartText">Descargar</span>
       </button>
     </div>
   </footer>
@@ -492,5 +665,8 @@
 
   <script src="app.js"></script>
   <script src="batch.js"></script>
+  <script src="download.js"></script>
+  <script src="import.js"></script>
+  <script src="views.js"></script>
 </body>
 </html>

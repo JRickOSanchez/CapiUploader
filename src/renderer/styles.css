@@ -894,7 +894,7 @@ h2 .badge { margin-left: 6px; vertical-align: 2px; }
 .icon-btn.confirm { color: #fff; background: var(--danger); }
 
 /* =========================================================
-   v1.1 · Grupos por obra y acceso por capítulo
+   v1.1 · Grupos por obra
    ========================================================= */
 .chapter-list .group-head {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-top: 6px; border-radius: 14px;
@@ -912,15 +912,6 @@ h2 .badge { margin-left: 6px; vertical-align: 2px; }
 .group-actions .btn span { display: inline-grid; }
 .group-actions .btn svg { width: 14px; height: 14px; }
 
-.ch-access { display: flex; gap: 8px; align-items: center; }
-.ch-access select, .ch-access input { height: 34px; border-radius: 8px; font-size: 12.5px; }
-.ch-access select { padding-right: 28px; background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px; font-weight: 700; }
-.ch-access-select.access-public { color: var(--text); }
-.ch-access-select.access-early-date, .ch-access-select.access-early-manual { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 55%, var(--border-strong)); background-color: var(--gold-soft); }
-.ch-release { width: 210px; flex: none; }
-.ch-release.auto { color: var(--text-2); font-style: italic; }
-.chrow.early { box-shadow: inset 3px 0 0 var(--gold); }
-
 /* Selector flotante de obra */
 .work-picker {
   position: fixed; z-index: 120; width: 340px; background: var(--surface); border: 1px solid var(--border-strong);
@@ -928,10 +919,73 @@ h2 .badge { margin-left: 6px; vertical-align: 2px; }
 }
 .work-picker .combo-list { max-height: 320px; }
 
-/* Bloque de acceso en «Publicación» */
-.access-block { display: flex; flex-direction: column; gap: 12px; }
-.access-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-.access-block .inline input#accLastN { flex: 0 0 64px; }
-.access-block .inline .inline-text { white-space: nowrap; }
 /* El menú de scans vive en la barra superior: la barra debe quedar por encima del contenido. */
 .topbar { position: relative; z-index: 50; }
+
+/* =========================================================
+   v1.3 · Secciones (Subir / Importar / Descargar)
+   ========================================================= */
+.view-tabs {
+  display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border); -webkit-app-region: no-drag;
+}
+.view-tabs button {
+  height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2);
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font: 800 12px var(--font); text-transform: uppercase; letter-spacing: .06em;
+}
+.view-tabs button svg { width: 15px; height: 15px; }
+.view-tabs button:hover { color: var(--text); }
+.view-tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+.view-tabs .busy-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
+
+/* Descargar */
+.dl-works-card { display: flex; flex-direction: column; flex: 1 0 320px; min-height: 320px; overflow: hidden; }
+.dl-search { border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-2); padding: 4px 12px; }
+.dl-work-list { flex: 1; min-height: 0; max-height: none; margin-top: 8px; padding: 0; overflow-y: auto; }
+.dl-dest { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); margin-bottom: 8px; }
+.dl-dest-path { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.dl-range { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.dl-range input { width: 64px; height: 30px; padding: 0 8px; border-radius: 8px; font-size: 12.5px; }
+.dl-body { flex: 1; min-height: 0; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); overflow: hidden; }
+.dl-list { list-style: none; margin: 0; padding: 8px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.dl-row {
+  flex: none; position: relative; display: grid; grid-template-columns: 22px 92px 1fr auto auto; align-items: center; gap: 12px;
+  padding: 8px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; overflow: hidden;
+}
+.dl-row:hover { border-color: var(--border-strong); }
+.dl-row.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.dl-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.dl-num { font-weight: 800; white-space: nowrap; }
+.dl-num small { font-weight: 600; color: var(--text-3); margin-left: 4px; }
+.dl-title { min-width: 0; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
+.dl-meta { font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
+.dl-row .ch-status.skipped { background: var(--surface-3); color: var(--text-2); }
+.dl-row[data-status="downloading"] { border-color: var(--accent); }
+.dl-row[data-status="error"] { border-color: var(--danger); }
+.dl-row[data-status="done"], .dl-row[data-status="skipped"] { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+
+/* Importar de web */
+.im-site { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.im-site-icon { width: 32px; height: 32px; border-radius: 8px; flex: none; object-fit: cover; background: var(--surface-3); }
+#imCatalog { margin-top: 10px; }
+.im-work { display: flex; align-items: center; gap: 12px; }
+.im-work .work-text { flex: 1; }
+.im-work .badge { align-self: flex-start; margin-top: 2px; }
+.im-warn { display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--warning-soft); border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.im-warn > span svg { width: 20px; height: 20px; color: var(--warning); }
+.im-warn strong { display: block; font-size: 13px; }
+.im-warn p { margin: 4px 0 10px; font-size: 12.5px; color: var(--text-2); }
+.im-warn-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.im-confirm { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); cursor: pointer; font-size: 12.5px; }
+.im-confirm input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
+.im-lang { height: 30px; border-radius: 8px; font-size: 12.5px; padding: 0 28px 0 10px; margin-right: 6px; }
+#imInterval { flex: 0 0 80px; }
+.im-row { grid-template-columns: 22px 104px 1fr auto auto; }
+.im-row.invalid { border-color: var(--danger); }
+.im-num { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 12.5px; }
+.im-num input { width: 66px; height: 28px; padding: 0 6px; border-radius: 7px; font-size: 12.5px; font-weight: 700; }
+.list-tools { justify-content: flex-start; align-items: center; gap: 4px; margin: -4px 0 10px; }
+.list-tools .dl-range { margin-left: auto; }
+.dl-format { margin: 4px 0 8px; }
+.list-tools select.im-lang { width: auto; max-width: 230px; flex: none; }
