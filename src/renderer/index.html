@@ -149,7 +149,7 @@
               <input type="number" id="renumberFrom" step="any" min="0" placeholder="Ej. 13" />
               <button type="button" class="btn secondary" id="renumberBtn">Aplicar</button>
             </div>
-            <span class="hint">Asigna números seguidos según el orden de la lista.</span>
+            <span class="hint">Asigna números seguidos según el orden de la lista. Antes de cambiar un número que viene del nombre de la carpeta, pregunta.</span>
           </div>
         </div>
       </div>
@@ -260,9 +260,6 @@
             <button type="button" class="btn ghost small" id="batchAddBtn" title="Agregar más carpetas">
               <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar
             </button>
-            <button type="button" class="btn ghost small" id="batchClearDoneBtn" title="Quitar los ya subidos" hidden>
-              <svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>Quitar subidos
-            </button>
             <button type="button" class="btn ghost small danger" id="batchClearBtn" title="Quitar todos">
               <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Limpiar
             </button>
@@ -286,6 +283,26 @@
             <div><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Suelta las carpetas</div>
           </div>
         </div>
+      </div>
+
+      <!-- Capítulos subidos (varios) -->
+      <div class="card uploaded-card batch-only" id="uploadedCard" hidden>
+        <div class="card-head">
+          <span class="step done"><svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></span>
+          <div>
+            <h2>Capítulos <span class="hl">subidos</span> <span class="badge success" id="uploadedCount">0</span></h2>
+            <p class="muted" id="uploadedSummary">Salen de la cola al terminar de subirse. Se guardan aunque cierres el programa.</p>
+          </div>
+          <div class="toolbar">
+            <button type="button" class="btn ghost small" id="uploadedToggle" title="Mostrar u ocultar la lista">
+              <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><span>Ocultar</span>
+            </button>
+            <button type="button" class="btn ghost small danger" id="uploadedClear" title="Vaciar la lista (no borra nada de Capibara)">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Vaciar
+            </button>
+          </div>
+        </div>
+        <ol class="uploaded-list" id="uploadedList"></ol>
       </div>
 
       <div class="card pages-card single-only">
@@ -627,6 +644,21 @@
         <button type="button" class="btn secondary" id="doneOpen">Ver en Capibara</button>
         <button type="button" class="btn primary" id="doneNext">Subir otro capítulo</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: pregunta (varios capítulos) ===== -->
+  <div class="modal" id="askModal" hidden>
+    <div class="modal-card ask-card">
+      <div class="modal-head">
+        <div class="modal-icon" id="askIcon"></div>
+        <div>
+          <h3 id="askTitle"></h3>
+          <p class="muted" id="askText"></p>
+        </div>
+      </div>
+      <ul class="ask-list" id="askList" hidden></ul>
+      <div class="modal-actions" id="askActions"></div>
     </div>
   </div>
 

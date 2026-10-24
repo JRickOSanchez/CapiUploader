@@ -7,12 +7,18 @@
    ========================================================= */
 const batch = {
   // { id, name, dir, parent, files, workId, workGuess, number, numberAuto, volume, volumeAuto, title,
-  //   status, progress, error, result, refs }
+  //   parsedNumber, numberSource, keptPublished, status, progress, error, result, refs }
+  // parsedNumber: el número que trae el nombre de la carpeta (null si no trae).
+  // numberSource: 'folder' | 'auto' (siguiente libre) | 'manual' | 'renumber'
   items: [],
   seq: 0,
   volumeAuto: true,
   cancelled: false,
   pmItem: null,
+  // Capítulos que ya salieron de la cola (subidos u omitidos por estar publicados), del más nuevo al más viejo.
+  uploaded: [],
+  uploadedScan: undefined,
+  uploadedOpen: localStorage.getItem('uploadedOpen') !== '0',
 }
 
 const UNIT_MS = { minutes: 60e3, hours: 3600e3, days: 864e5, weeks: 7 * 864e5 }
@@ -34,6 +40,69 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 const workById = (id) => (id == null ? null : state.works.find((w) => w.id === id) || null)
 const pendingItems = () => batch.items.filter((i) => i.status !== 'done')
+const ICON_OPEN = '<svg viewBox="0 0 24 24"><path d="M14 4h6v6m0-6-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
+
+/** [1, 2, 3, 5, 7, 8] → «1–3, 5, 7–8» */
+function numberRanges(nums) {
+  const sorted = [...new Set(nums)].sort((a, b) => a - b)
+  const out = []
+  for (let i = 0; i < sorted.length; i++) {
+    let j = i
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++
+    out.push(j > i ? `${sorted[i]}–${sorted[j]}` : String(sorted[i]))
+    i = j
+  }
+  return out.join(', ')
+}
+
+/* ---------- Preguntas ---------- */
+
+let askChain = Promise.resolve()
+
+/**
+ * Muestra una pregunta y resuelve con el `value` del botón elegido.
+ * Escape o un clic fuera eligen el botón marcado con `cancel`. Las preguntas se encolan.
+ */
+function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons }) {
+  const run = () => new Promise((resolve) => {
+    const modal = $('#askModal')
+    const cancel = buttons.find((b) => b.cancel) || buttons[0]
+    $('#askIcon').innerHTML = kind === 'info' ? ICONS.info : ICONS.warn
+    $('#askIcon').className = `modal-icon ${kind}`
+    $('#askTitle').textContent = title
+    $('#askText').textContent = text
+    const ul = $('#askList')
+    ul.innerHTML = ''
+    list.forEach((line) => ul.append(el('li', { text: line })))
+    if (more > 0) ul.append(el('li', { class: 'more', text: `…y ${more} más` }))
+    ul.hidden = !list.length
+    const actions = $('#askActions')
+    actions.innerHTML = ''
+    const done = (value) => {
+      modal.hidden = true
+      document.removeEventListener('keydown', onKey, true)
+      modal.removeEventListener('mousedown', onBackdrop)
+      resolve(value)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(cancel.value) } }
+    const onBackdrop = (e) => { if (e.target === modal) done(cancel.value) }
+    buttons.forEach((b, i) => {
+      if (i === 1 && buttons.length > 2) actions.append(el('span', { class: 'spacer' }))
+      actions.append(el('button', { type: 'button', class: `btn ${b.kind || 'secondary'}`, onclick: () => done(b.value) }, b.label))
+    })
+    if (buttons.length <= 2) actions.prepend(el('span', { class: 'spacer' }))
+    document.addEventListener('keydown', onKey, true)
+    modal.addEventListener('mousedown', onBackdrop)
+    modal.hidden = false
+    // El foco va al botón marcado con focus, si no a la opción recomendada y si no a la de cancelar
+    // (nunca a una peligrosa).
+    const target = buttons.find((b) => b.focus) || buttons.find((b) => b.kind === 'primary') || cancel
+    ;[...actions.querySelectorAll('button')][buttons.indexOf(target)]?.focus()
+  })
+  const p = askChain.then(run)
+  askChain = p.catch(() => {})
+  return p
+}
 
 /* ---------- Detección de número, tomo y título ---------- */
 
@@ -115,9 +184,57 @@ function matchWork(folderName) {
       if (sc > score) { score = sc; best = w }
     }
   }
-  if (score >= 0.85) return { work: best, sure: true }
-  if (score >= 0.6) return { work: best, sure: false }
+  if (score >= 0.85) return { work: best, sure: true, score }
+  if (score >= 0.6) return { work: best, sure: false, score }
   return null
+}
+
+const VOL_RE = /\b(?:vol(?:umen|ume)?|tomo|v)\s*[.#:-]?\s*(\d+)\b/i
+const CAP_RE = /\b(?:cap(?:[ií]tulo|itulo)?|chapter|chap|ch|ep(?:isodio|isode)?|c)\s*[.#:-]?\s*(\d+(?:[.,]\d+)?)/i
+
+/** Quita guiones bajos y lo que va entre corchetes, paréntesis o llaves: «Choujin X [Scan] (2023)» → «Choujin X». */
+const cleanFolderName = (raw) => String(raw || '').replace(/_+/g, ' ').replace(/\[[^\]]*\]|\([^)]*\)|\{[^}]*\}/g, ' ').replace(/\s+/g, ' ').trim()
+
+/** La parte del nombre de un capítulo que nombra a la obra: «Choujin X Cap 12 - Título» → «Choujin X». */
+function workHintFromName(raw) {
+  let s = cleanFolderName(raw)
+  const cap = s.match(CAP_RE)
+  if (cap) s = s.slice(0, cap.index)
+  else {
+    const m = s.match(/^(.*?)(?:\s+|[-–—_]+)\d+(?:[.,]\d+)?(?:\s*[-–—:|].*)?$/)
+    if (m) s = m[1]
+    else if (/^\s*\d/.test(s)) s = ''
+  }
+  s = s.replace(VOL_RE, ' ')
+  return s.replace(/[-–—:|]+\s*$/, '').replace(/\s+/g, ' ').trim()
+}
+
+/** Tomo según la carpeta que contiene al capítulo, si se llama «Vol 2», «Tomo 3», «Volumen 01»… */
+function volumeFromFolder(name) {
+  const m = cleanFolderName(name).match(/^(?:vol(?:umen|ume)?|tomo|v)\s*[.#:-]?\s*(\d+)$/i)
+  return m ? parseInt(m[1], 10) : null
+}
+
+/**
+ * Adivina la obra de un capítulo: primero por las carpetas que lo contienen, de la más cercana
+ * a la más lejana («Lote/Choujin X/Vol 1/Cap 3» → «Choujin X»), y si no, por su propio nombre
+ * («Choujin X Cap 12»). Devuelve { work, sure, score, from } o null.
+ */
+function guessWork(ancestors, name) {
+  let best = null
+  const consider = (text, from) => {
+    const m = text ? matchWork(text) : null
+    if (m && (!best || m.score > best.score)) best = { ...m, from }
+    return m?.sure
+  }
+  for (const a of ancestors) {
+    // Tal cual (sin corchetes) y sin números de tomo o capítulo; no se recorta un número
+    // final sin más, porque hay obras como «Kaiju No. 8» o «Mob Psycho 100».
+    const cands = new Set([cleanFolderName(a), workHintFromName(a)])
+    for (const c of cands) if (consider(c, a)) return best
+  }
+  consider(workHintFromName(name), name)
+  return best
 }
 
 /* ---------- Números y tomos por obra ---------- */
@@ -154,6 +271,80 @@ function allocateAutoNumbers(items) {
   }
 }
 
+/**
+ * Renumera en orden los capítulos pendientes de cada grupo, empezando en startFor(grupo).
+ * Si alguno trae el número en el nombre de su carpeta, pregunta antes de cambiárselo.
+ * Devuelve { count, all } o null si se canceló.
+ */
+async function renumberGroups(groups, startFor) {
+  const targets = groups
+    .map((g) => ({ g, items: g.items.filter((i) => i.status !== 'done') }))
+    .filter((x) => x.items.length)
+  const named = targets.flatMap((x) => x.items.filter((i) => i.parsedNumber != null))
+  const free = targets.flatMap((x) => x.items.filter((i) => i.parsedNumber == null))
+  let all = true
+
+  if (named.length) {
+    // Ejemplo: lo que le pasaría al primero que tiene número en la carpeta.
+    const ex = named[0]
+    const exGroup = targets.find((x) => x.items.includes(ex))
+    const exNew = startFor(exGroup.g) + exGroup.items.indexOf(ex)
+    const changed = targets.flatMap((x) => x.items.map((it, i) => ({ it, n: startFor(x.g) + i })))
+      .filter(({ it, n }) => it.parsedNumber != null && it.parsedNumber !== n).length
+    if (changed) {
+      // Lo más común: se volvió a agregar una carpeta con capítulos ya subidos.
+      const published = findPublished(targets.flatMap((x) => x.items), { includeKept: true })
+      const choice = await ask({
+        kind: 'warn',
+        title: `${plural(named.length, 'capítulo trae', 'capítulos traen')} el número en el nombre de su carpeta`,
+        text: `Si los renumeras, ${changed === 1 ? 'uno dejará' : `${changed} dejarán`} de coincidir con su carpeta${exNew !== ex.parsedNumber ? `: «${ex.name}» es el cap ${ex.parsedNumber} y pasaría a ser el ${exNew}` : ''}.`
+          + (published.length ? ` ${published.length === 1 ? 'Uno ya está publicado' : `${published.length} ya están publicados`}: lo normal es omitirlos y subir el resto con su número.` : ''),
+        buttons: [
+          { value: 'cancel', label: 'Cancelar', cancel: true },
+          { value: 'all', label: 'Renumerar todos', kind: 'ghost danger' },
+          published.length ? { value: 'skip', label: `Omitir los ${published.length} ya publicados`, kind: 'primary' } : null,
+          free.length ? { value: 'free', label: `Solo los ${free.length} sin número`, kind: published.length ? 'secondary' : 'primary' } : null,
+        ].filter(Boolean),
+      })
+      if (choice === 'cancel') return null
+      if (choice === 'skip') {
+        skipPublished(published)
+        renderBatch()
+        renderUploaded()
+        batchValidate()
+        return { count: 0, all: false, skipped: published.length }
+      }
+      all = choice === 'all'
+    }
+  }
+
+  let count = 0
+  for (const { g, items } of targets) {
+    let n = startFor(g)
+    if (all) {
+      for (const it of items) { it.number = n++; it.numberAuto = false; it.numberSource = 'renumber'; count++ }
+      continue
+    }
+    // Solo los que no traen número, sin chocar con lo publicado ni con los que sí lo traen.
+    const taken = new Set([
+      ...workChapters(g.workId).map((c) => Number(c.number)),
+      ...items.filter((i) => i.parsedNumber != null).map((i) => i.number),
+    ])
+    for (const it of items) {
+      if (it.parsedNumber != null) continue
+      while (taken.has(n)) n++
+      it.number = n
+      taken.add(n++)
+      it.numberAuto = false
+      it.numberSource = 'renumber'
+      count++
+    }
+  }
+  renderBatch()
+  batchValidate()
+  return { count, all }
+}
+
 function readDefaultVolume() {
   const v = $('#batchVolume').value.trim()
   return v === '' ? null : Number(v)
@@ -188,20 +379,26 @@ async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
 
   const items = fresh.map((c) => {
     const p = parseChapterName(c.name)
-    const match = opts.workId != null ? null : matchWork(c.parent)
-    if (match && !match.sure) guesses.set(c.parent, match.work.title)
+    const ancestors = c.ancestors || (c.parent ? [c.parent] : [])
+    const match = opts.workId != null ? null : guessWork(ancestors, c.name)
+    if (match && !match.sure) guesses.set(match.from, match.work.title)
+    const volume = p.volume ?? volumeFromFolder(ancestors[0])
     return {
       id: ++batch.seq,
       name: c.name,
       dir: c.dir,
       parent: c.parent || '',
+      ancestors,
       files: c.files.map((f) => ({ ...f, id: ++fileSeq, status: null })),
       workId: opts.workId ?? match?.work.id ?? state.selectedWork?.id ?? null,
       workGuess: Boolean(match),
       number: p.number,
       numberAuto: p.number == null,
-      volume: p.volume,
-      volumeAuto: p.volume == null,
+      parsedNumber: p.number,
+      numberSource: p.number == null ? 'auto' : 'folder',
+      keptPublished: null,
+      volume,
+      volumeAuto: volume == null,
       title: p.title,
       status: 'pending',
       progress: 0,
@@ -238,6 +435,78 @@ async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
 
   renderBatch()
   batchValidate()
+  await offerSkipPublished(items)
+}
+
+/* ---------- Capítulos que ya están publicados ---------- */
+
+/**
+ * Busca en la lista capítulos cuyo número ya existe en su obra y pregunta si omitirlos.
+ * Los omitidos pasan a «Capítulos subidos» como «Ya estaba publicado».
+ */
+/** Capítulos de la lista cuyo número ya existe en su obra: [{ it, remote }]. */
+function findPublished(items, { includeKept = false } = {}) {
+  const found = []
+  for (const it of items) {
+    if (!batch.items.includes(it) || it.status === 'done' || it.workId == null || it.number == null) continue
+    if (!includeKept && it.keptPublished === `${it.workId}:${it.number}`) continue // ya se preguntó y se decidió dejarlo
+    const remote = workChapters(it.workId).find((c) => Number(c.number) === it.number)
+    if (remote) found.push({ it, remote })
+  }
+  return found
+}
+
+/** Saca de la cola los ya publicados y los deja en «Capítulos subidos» como «Ya estaba publicado». */
+function skipPublished(found) {
+  const ids = new Set(found.map((f) => f.it.id))
+  // Del más viejo al más nuevo, para que la lista de subidos quede en orden de capítulo.
+  for (const f of [...found].sort((a, b) => a.it.number - b.it.number)) pushUploaded(uploadedEntry(f.it, f.remote, 'existing'))
+  saveUploaded()
+  batch.items = batch.items.filter((i) => !ids.has(i.id))
+  toast('success', plural(found.length, 'capítulo omitido', 'capítulos omitidos'), 'Quedaron en «Capítulos subidos» como «Ya estaba publicado».')
+}
+
+async function offerSkipPublished(items) {
+  if (state.uploading) return
+  const found = findPublished(items)
+  if (!found.length) return
+
+  const byWork = new Map()
+  for (const f of found) {
+    if (!byWork.has(f.it.workId)) byWork.set(f.it.workId, [])
+    byWork.get(f.it.workId).push(f)
+  }
+  const samePages = found.filter((f) => f.remote.pages == null || f.remote.pages === f.it.files.length).length
+  const differ = found.filter((f) => f.remote.pages != null && f.remote.pages !== f.it.files.length)
+  const list = [...byWork].map(([workId, fs]) =>
+    `«${workById(workId)?.title || 'Obra'}»: ${fs.length === 1 ? 'cap' : 'caps'} ${numberRanges(fs.map((f) => f.it.number))}`)
+  differ.slice(0, 5).forEach((f) => list.push(`Cap ${f.it.number}: ${f.it.files.length} páginas aquí y ${f.remote.pages} en Capibara`))
+  const total = batch.items.filter((i) => i.status !== 'done').length
+
+  const choice = await ask({
+    kind: 'warn',
+    title: found.length === total
+      ? `${found.length === 1 ? 'Este capítulo ya está publicado' : `Los ${found.length} capítulos ya están publicados`}`
+      : `${found.length} de los ${total} capítulos ya están publicados`,
+    text: differ.length
+      ? `${plural(samePages, 'tiene', 'tienen')} la misma cantidad de páginas; ${plural(differ.length, 'tiene', 'tienen')} distinta cantidad: revísalos.`
+      : 'Coinciden en número y cantidad de páginas con los de Capibara. Si los dejas, no se podrán subir con ese número.',
+    list,
+    more: Math.max(0, differ.length - 5),
+    buttons: [
+      { value: 'keep', label: 'Dejarlos en la lista', cancel: true },
+      { value: 'skip', label: found.length === 1 ? 'Omitirlo' : `Omitir los ${found.length}`, kind: 'primary' },
+    ],
+  })
+
+  if (choice === 'skip') {
+    skipPublished(found)
+  } else {
+    for (const f of found) f.it.keptPublished = `${f.it.workId}:${f.it.number}`
+  }
+  renderBatch()
+  renderUploaded()
+  batchValidate()
 }
 
 function removeChapter(id) {
@@ -267,6 +536,7 @@ async function assignWork(items, work) {
   allocateAutoNumbers(targets)
   renderBatch()
   batchValidate()
+  await offerSkipPublished(targets)
 }
 
 function batchReset() {
@@ -286,21 +556,147 @@ function batchOnScanChanged() {
     it.workId = null
     it.workGuess = false
   }
+  loadUploaded()
   renderBatch()
 }
 
 /** Cuando cargan las obras del scan, se intenta asignar las que quedaron sin obra. */
 async function batchOnWorksLoaded() {
+  loadUploaded()
   const orphans = pendingItems().filter((i) => i.workId == null)
   if (!orphans.length) return
   for (const it of orphans) {
-    const m = matchWork(it.parent)
+    const m = guessWork(it.ancestors || [it.parent], it.name)
     if (m) { it.workId = m.work.id; it.workGuess = true }
   }
   await Promise.all([...new Set(orphans.map((i) => i.workId).filter((id) => id != null))].map((id) => ensureChapters(id)))
   allocateAutoNumbers(orphans)
   renderBatch()
   batchValidate()
+  await offerSkipPublished(orphans)
+}
+
+/* ---------- Capítulos subidos (se guardan por scan) ---------- */
+
+const UPLOADED_MAX = 1000
+const uploadedKey = () => `uploaded:${state.activeScanId}`
+
+function loadUploaded() {
+  if (batch.uploadedScan === state.activeScanId) return
+  batch.uploadedScan = state.activeScanId
+  batch.uploaded = []
+  if (state.activeScanId != null) {
+    try { batch.uploaded = JSON.parse(localStorage.getItem(uploadedKey()) || '[]') } catch { batch.uploaded = [] }
+  }
+  renderUploaded()
+}
+
+function saveUploaded() {
+  if (batch.uploaded.length > UPLOADED_MAX) batch.uploaded.length = UPLOADED_MAX
+  if (state.activeScanId == null) return
+  try { localStorage.setItem(uploadedKey(), JSON.stringify(batch.uploaded)) } catch { /* sin espacio: queda solo en memoria */ }
+}
+
+/**
+ * Agrega al inicio; si el mismo capítulo de la misma obra ya estaba en la lista, lo reemplaza.
+ * Un «Ya estaba publicado» no reemplaza al registro de cuando lo subió el programa.
+ */
+function pushUploaded(entry) {
+  const same = (e) => e.workId === entry.workId && e.number === entry.number
+  if (entry.kind === 'existing' && batch.uploaded.some((e) => same(e) && e.kind === 'uploaded')) return
+  batch.uploaded = batch.uploaded.filter((e) => !same(e))
+  batch.uploaded.unshift(entry)
+}
+
+/** kind: 'uploaded' (lo subió el programa; data = respuesta de la API) o 'existing' (data = capítulo publicado). */
+function uploadedEntry(it, data, kind) {
+  const existing = kind === 'existing'
+  return {
+    kind,
+    at: new Date().toISOString(),
+    workId: it.workId,
+    workTitle: workById(it.workId)?.title || '',
+    number: existing ? Number(data.number) : it.number,
+    volume: existing ? data.volumeNumber ?? null : it.volume ?? null,
+    title: (existing ? data.title : it.title) || '',
+    folder: it.name,
+    dir: it.dir,
+    pages: it.files.length,
+    remotePages: existing ? data.pages ?? null : null,
+    state: data.state || null,
+    publishAt: data.publishAt || null,
+    url: data.url || null,
+    thumb: it.files[0]?.url || null,
+  }
+}
+
+function uploadedStatus(e) {
+  if (e.kind === 'existing') return { cls: 'existing', text: 'Ya estaba publicado' }
+  if (e.state === 'scheduled' && e.publishAt) return { cls: 'scheduled', text: `Programado · ${formatDate(new Date(e.publishAt))}` }
+  return { cls: 'done', text: 'Publicado' }
+}
+
+function uploadedRow(e) {
+  const st = uploadedStatus(e)
+  const pagesDiffer = e.remotePages != null && e.remotePages !== e.pages
+  return el('li', { class: 'uprow' },
+    el('div', { class: 'up-cover' }, e.thumb ? el('img', { src: e.thumb, alt: '', loading: 'lazy', decoding: 'async', onerror: (ev) => ev.target.remove() }) : null),
+    el('div', { class: 'up-body' },
+      el('div', { class: 'up-title' },
+        el('b', { text: `Cap ${e.number}` }),
+        e.volume != null ? el('span', { class: 'up-vol', text: `· Vol ${e.volume}` }) : null,
+        e.title ? el('span', { class: 'up-name', text: `— ${e.title}` }) : null,
+        el('span', { class: 'up-work', text: e.workTitle })),
+      el('div', { class: 'ch-meta' },
+        el('span', { class: 'folder', text: `📁 ${e.folder}`, title: e.dir }),
+        el('span', { class: 'sep' }),
+        el('span', { class: pagesDiffer ? 'bad' : '', text: pagesDiffer ? `${e.pages} pág. aquí · ${e.remotePages} en Capibara` : `${e.pages} pág.` }),
+        el('span', { class: 'sep' }),
+        el('span', { text: relativeFromNow(new Date(e.at)), title: formatDate(new Date(e.at)) }))),
+    el('span', { class: `up-status ${st.cls}`, text: st.text }),
+    e.url
+      ? el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Abrir en Capibara', html: ICON_OPEN, onclick: () => window.capi.system.openExternal(e.url) })
+      : el('span', { class: 'up-noop' }))
+}
+
+function renderUploaded() {
+  const card = $('#uploadedCard')
+  const n = batch.uploaded.length
+  card.hidden = !n
+  $('#uploadedCount').textContent = formatNumber(n)
+  const existing = batch.uploaded.filter((e) => e.kind === 'existing').length
+  const parts = [
+    n - existing ? plural(n - existing, 'subido con el programa', 'subidos con el programa') : '',
+    existing ? plural(existing, 'omitido porque ya estaba publicado', 'omitidos porque ya estaban publicados') : '',
+  ].filter(Boolean)
+  $('#uploadedSummary').textContent = `${existing ? `${parts.join(' · ')}. ` : 'Salen de la cola al terminar de subirse. '}Se guardan aunque cierres el programa.`
+  card.classList.toggle('collapsed', !batch.uploadedOpen)
+  $('#uploadedToggle span').textContent = batch.uploadedOpen ? 'Ocultar' : 'Mostrar'
+  const list = $('#uploadedList')
+  list.innerHTML = ''
+  list.hidden = !batch.uploadedOpen
+  if (batch.uploadedOpen) batch.uploaded.forEach((e) => list.append(uploadedRow(e)))
+}
+
+function initUploaded() {
+  $('#uploadedToggle').addEventListener('click', () => {
+    batch.uploadedOpen = !batch.uploadedOpen
+    localStorage.setItem('uploadedOpen', batch.uploadedOpen ? '1' : '0')
+    renderUploaded()
+  })
+  $('#uploadedClear').addEventListener('click', async () => {
+    const choice = await ask({
+      kind: 'warn',
+      title: '¿Vaciar la lista de subidos?',
+      text: 'Solo se borra esta lista del programa. Los capítulos siguen en Capibara.',
+      buttons: [{ value: 'no', label: 'Cancelar', cancel: true }, { value: 'yes', label: 'Vaciar', kind: 'danger-solid' }],
+    })
+    if (choice !== 'yes') return
+    batch.uploaded = []
+    saveUploaded()
+    renderUploaded()
+  })
+  loadUploaded()
 }
 
 /** La obra elegida arriba es la predeterminada para lo que no tenga obra. */
@@ -418,6 +814,9 @@ function batchValidate() {
       it.refs.row.classList.toggle('invalid', Boolean(visible))
       it.refs.error.textContent = visible ? err : it.status === 'error' ? it.error : ''
       it.refs.when.textContent = whenText(it, plan)
+      const n = numberNote(it)
+      it.refs.note.className = `ch-note${n ? ` ${n.cls}` : ''}`
+      it.refs.note.textContent = n ? n.text : ''
     }
   }
   if (bad) errors.rows = bad === 1 ? 'Un capítulo tiene datos por corregir.' : `${bad} capítulos tienen datos por corregir.`
@@ -489,6 +888,18 @@ function renderBatchSummary(plan, errors) {
 
 /* ---------- Render ---------- */
 
+/** Aviso bajo la fila cuando el número no es el que trae el nombre de la carpeta. */
+function numberNote(it) {
+  if (it.status === 'done' || it.number == null || Number.isNaN(it.number)) return null
+  if (it.parsedNumber != null && it.number !== it.parsedNumber) {
+    return { cls: 'warn', text: `La carpeta dice cap ${it.parsedNumber} → se subirá como cap ${it.number}` }
+  }
+  if (it.parsedNumber == null && it.numberSource === 'auto') {
+    return { cls: 'info', text: 'La carpeta no trae número: se le asignó el siguiente libre' }
+  }
+  return null
+}
+
 function statusInfo(it) {
   switch (it.status) {
     case 'uploading': return { cls: 'uploading', text: `Subiendo ${Math.round((it.progress || 0) * 100)}%` }
@@ -516,7 +927,7 @@ function chapterRow(it) {
 
   const num = el('input', {
     type: 'number', step: 'any', min: '0', placeholder: '—', value: it.number ?? '', disabled: locked, title: 'Número de capítulo',
-    oninput: (e) => { it.number = e.target.value === '' ? null : Number(e.target.value); it.numberAuto = false; batchValidate() },
+    oninput: (e) => { it.number = e.target.value === '' ? null : Number(e.target.value); it.numberAuto = false; it.numberSource = 'manual'; batchValidate() },
   })
   const vol = el('input', {
     type: 'number', step: '1', min: '0', placeholder: '—', value: it.volume ?? '', disabled: locked, title: 'Tomo',
@@ -527,6 +938,7 @@ function chapterRow(it) {
     oninput: (e) => { it.title = e.target.value.trim() },
   })
   const when = el('span', { class: 'when' })
+  const note = el('div', { class: 'ch-note' })
   const error = el('div', { class: 'ch-error' })
   const status = el('span', {
     class: 'ch-status',
@@ -554,6 +966,7 @@ function chapterRow(it) {
         tooBig ? el('span', { class: 'bad', text: `${tooBig} > 40 MB` }) : null,
         el('span', { class: 'sep' }),
         when),
+      note,
       error),
     el('div', { class: 'ch-side' },
       status,
@@ -567,7 +980,7 @@ function chapterRow(it) {
   handle.addEventListener('mousedown', () => { if (!locked) row.draggable = true })
   row.addEventListener('dragend', () => { row.draggable = false })
 
-  it.refs = { row, num, vol, when, error, status, progress }
+  it.refs = { row, num, vol, when, note, error, status, progress }
   updateRowStatus(it)
   return row
 }
@@ -594,13 +1007,13 @@ function groupHeader(g) {
     el('div', { class: 'group-actions' },
       work && pending.length ? el('button', {
         type: 'button', class: 'btn ghost small', title: 'Numerar en orden desde el siguiente al último publicado', disabled: state.uploading,
-        onclick: () => {
+        onclick: async () => {
           const start = last ? Math.floor(last.number) + 1 : 1
-          let n = start
-          for (const it of g.items) { if (it.status !== 'done') { it.number = n++; it.numberAuto = false } }
-          renderBatch()
-          batchValidate()
-          toast('success', `«${work.title}» renumerada`, `Del ${start} al ${n - 1}.`)
+          const res = await renumberGroups([g], () => start)
+          if (!res?.count) return
+          toast('success', `«${work.title}» renumerada`, res.all
+            ? `Del ${start} al ${start + res.count - 1}.`
+            : `${plural(res.count, 'capítulo sin número', 'capítulos sin número')} desde el ${start}; los demás conservan el de su carpeta.`)
         },
       }, 'Numerar desde el último') : null,
       el('button', {
@@ -618,8 +1031,9 @@ function renderBatch() {
   $('#batchEmpty').hidden = has
   list.hidden = !has
   $('#batchToolbar').hidden = !has
-  $('#batchClearDoneBtn').hidden = !batch.items.some((i) => i.status === 'done')
 
+  // Se vuelve a dibujar a menudo (p. ej. cada vez que un capítulo sale de la cola): sin saltar al inicio.
+  const scroll = list.scrollTop
   list.innerHTML = ''
   for (const g of groupedItems()) {
     list.append(groupHeader(g))
@@ -628,6 +1042,7 @@ function renderBatch() {
   if (has && !state.uploading) {
     list.append(el('li', { class: 'add-row', onclick: pickChapters, html: `${ICONS.plus}<span>Agregar más carpetas</span>` }))
   }
+  list.scrollTop = scroll
 }
 
 /* ---------- Selector flotante de obra ---------- */
@@ -910,11 +1325,6 @@ function initBatchDrop() {
     renderBatch()
     batchValidate()
   })
-  $('#batchClearDoneBtn').addEventListener('click', () => {
-    batch.items = batch.items.filter((i) => i.status !== 'done')
-    renderBatch()
-    batchValidate()
-  })
   $('#batchClearBtn').addEventListener('click', batchReset)
 }
 
@@ -933,6 +1343,7 @@ async function batchStart() {
   }
 
   const { plan, queue } = v
+  if (!(await confirmNumbering(queue))) return
   const scanName = activeProfile()?.name || 'tu scan'
   const workIds = [...new Set(queue.map((i) => i.workId))]
   for (const it of queue) { it.status = 'pending'; it.error = ''; it.progress = 0 }
@@ -1005,9 +1416,15 @@ async function batchStart() {
       tally.ok++
       warnSingles(res.data.singleCheck, it.number)
       const cache = state.chaptersByWork.get(it.workId)
-      const entry = { number: it.number, volumeNumber: it.volume, state: res.data.state }
+      const entry = { id: res.data.id, number: it.number, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url }
       if (cache) cache.push(entry)
       if (state.selectedWork?.id === it.workId && state.chapters !== cache) state.chapters.push(entry)
+      // Sale de la cola y pasa a «Capítulos subidos».
+      pushUploaded(uploadedEntry(it, res.data, 'uploaded'))
+      saveUploaded()
+      batch.items = batch.items.filter((i) => i !== it)
+      renderBatch()
+      renderUploaded()
     } else if (res.error.code === 'cancelled') {
       it.status = 'pending'
       it.progress = 0
@@ -1042,6 +1459,40 @@ async function batchStart() {
     return
   }
   showBatchDone(plan, perWork, { ok, failed, pending })
+}
+
+/**
+ * Antes de subir: si algún capítulo va con un número distinto al de su carpeta, o con uno
+ * asignado solo porque la carpeta no lo trae, se muestra el resumen y se pide confirmación.
+ */
+async function confirmNumbering(queue) {
+  const odd = queue.filter((i) => i.parsedNumber != null && i.number !== i.parsedNumber)
+  const auto = queue.filter((i) => i.parsedNumber == null && i.numberSource === 'auto')
+  if (!odd.length && !auto.length) return true
+  const MAX = 8
+  const lines = [
+    ...odd.map((i) => `«${i.name}» → cap ${i.number} (la carpeta dice ${i.parsedNumber})`),
+    ...auto.map((i) => `«${i.name}» → cap ${i.number} (la carpeta no trae número)`),
+  ]
+  const choice = await ask({
+    kind: 'warn',
+    title: 'Revisa la numeración antes de subir',
+    text: [
+      odd.length ? `${plural(odd.length, 'capítulo se subirá', 'capítulos se subirán')} con un número distinto al de su carpeta.` : '',
+      auto.length ? `${plural(auto.length, 'capítulo no trae', 'capítulos no traen')} número en el nombre y se numeró solo.` : '',
+    ].filter(Boolean).join(' '),
+    list: lines.slice(0, MAX),
+    more: lines.length - MAX,
+    buttons: [
+      { value: 'review', label: 'Revisar', cancel: true, focus: true },
+      { value: 'go', label: 'Subir así', kind: 'primary' },
+    ],
+  })
+  if (choice === 'go') return true
+  const first = odd[0] || auto[0]
+  first.refs?.row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  first.refs?.num.focus()
+  return false
 }
 
 function showBatchDone(plan, perWork, { ok, failed, pending }) {
@@ -1092,6 +1543,7 @@ function initBatch() {
   initBatchDrop()
   initPagesModal()
   initWorkPicker()
+  initUploaded()
   $$('#modeSwitch button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)))
 
   $('#batchVolume').addEventListener('input', () => { batch.volumeAuto = false; batchValidate() })
@@ -1100,25 +1552,17 @@ function initBatch() {
     if (state.mode === 'batch') renderBatch()
     validate()
   })
-  $('#renumberBtn').addEventListener('click', () => {
+  $('#renumberBtn').addEventListener('click', async () => {
     const start = Number($('#renumberFrom').value)
     if ($('#renumberFrom').value.trim() === '' || Number.isNaN(start) || start < 0) {
       $('#renumberFrom').focus()
       return toast('warn', 'Indica desde qué número empezar')
     }
-    let count = 0
-    for (const g of groupedItems()) {
-      let n = start
-      for (const it of g.items) {
-        if (it.status === 'done') continue
-        it.number = n++
-        it.numberAuto = false
-        count++
-      }
-    }
-    renderBatch()
-    batchValidate()
-    if (count) toast('success', 'Capítulos renumerados', `Cada obra empieza en el ${start}, en el orden de la lista.`)
+    const res = await renumberGroups(groupedItems(), () => start)
+    if (!res?.count) return
+    toast('success', 'Capítulos renumerados', res.all
+      ? `Cada obra empieza en el ${start}, en el orden de la lista.`
+      : `${plural(res.count, 'capítulo sin número', 'capítulos sin número')} desde el ${start}; los demás conservan el de su carpeta.`)
   })
   $('#batchInterval').addEventListener('input', () => validate())
   $('#batchIntervalUnit').addEventListener('change', () => validate())

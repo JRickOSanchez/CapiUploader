@@ -335,12 +335,32 @@ async function listSubdirs(dir) {
 }
 
 /**
+ * Nombres de las carpetas que contienen al capítulo, de la más cercana a la más lejana,
+ * hasta la que contiene lo elegido. Sirven para adivinar la obra: «Lote/Choujin X/Vol 1/Cap 3»
+ * → ["Vol 1", "Choujin X", "Lote", …].
+ */
+function ancestorNames(dir, root) {
+  const out = []
+  const stop = path.dirname(path.resolve(root))
+  let cur = path.dirname(path.resolve(dir))
+  while (out.length < 4) {
+    const name = path.basename(cur)
+    if (!name) break
+    out.push(name)
+    if (cur === stop || path.dirname(cur) === cur) break
+    cur = path.dirname(cur)
+  }
+  return out
+}
+
+/**
  * Modo de varios capítulos: cada carpeta con imágenes es un capítulo. Se aceptan hasta
- * dos niveles bajo lo que se suelta, p. ej. «Lote/Kirara/Cap 4». parent es el nombre de
- * la carpeta que contiene al capítulo y sirve para adivinar la obra.
+ * dos niveles bajo lo que se suelta, p. ej. «Lote/Kirara/Cap 4» u «Obra/Vol 1/Cap 4».
+ * parent es la carpeta que contiene al capítulo y ancestors todas las que lo contienen;
+ * sirven para adivinar la obra.
  */
 async function resolveChapters(paths) {
-  const found = [] // { name, dir, parent, candidates }
+  const found = [] // { name, dir, root, candidates }
   const skipped = []
   let looseFiles = 0
   for (const p of paths) {
@@ -349,7 +369,7 @@ async function resolveChapters(paths) {
     if (!st.isDirectory()) { looseFiles++; continue }
     const candidates = await listCandidates(p)
     if (candidates.length) {
-      found.push({ name: path.basename(p), dir: p, parent: path.basename(path.dirname(p)), candidates })
+      found.push({ name: path.basename(p), dir: p, root: p, candidates })
       continue
     }
     let count = 0
@@ -357,7 +377,7 @@ async function resolveChapters(paths) {
       const dir = path.join(p, sub)
       const subFiles = await listCandidates(dir).catch(() => [])
       if (subFiles.length) {
-        found.push({ name: sub, dir, parent: path.basename(p), candidates: subFiles })
+        found.push({ name: sub, dir, root: p, candidates: subFiles })
         count++
         continue
       }
@@ -366,7 +386,7 @@ async function resolveChapters(paths) {
         const dir2 = path.join(dir, sub2)
         const files2 = await listCandidates(dir2).catch(() => [])
         if (files2.length) {
-          found.push({ name: sub2, dir: dir2, parent: sub, candidates: files2 })
+          found.push({ name: sub2, dir: dir2, root: p, candidates: files2 })
           count++
         }
       }
@@ -381,8 +401,9 @@ async function resolveChapters(paths) {
   const chapters = []
   for (const c of found) {
     const chFiles = c.candidates.map((p) => byPath.get(p)).filter(Boolean)
-    if (chFiles.length) chapters.push({ name: c.name, dir: c.dir, parent: c.parent, files: chFiles })
-    else skipped.push(c.name)
+    if (!chFiles.length) { skipped.push(c.name); continue }
+    const ancestors = ancestorNames(c.dir, c.root)
+    chapters.push({ name: c.name, dir: c.dir, parent: ancestors[0] || '', ancestors, files: chFiles })
   }
   return { chapters, skipped, looseFiles, psd: psdReport(summary) }
 }

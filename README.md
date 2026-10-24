@@ -25,8 +25,19 @@ importación o descarga sigue en marcha aunque cambies de sección (la pestaña 
 
 - **Un capítulo**: arrastra las páginas, marca páginas simples y la destacada, programa y sube.
 - **Varios capítulos**: una carpeta por capítulo, de una o varias obras del mismo scan.
-  - Soltar `Lote/Obra/Capítulo` reparte los capítulos por obra según el nombre de la carpeta.
+  - La obra se detecta por el nombre de la carpeta que contiene los capítulos. Por ejemplo, elegir
+    `Choujin X` con `Cap 1`, `Cap 2`… dentro los asigna a esa obra. También funciona con
+    `Lote/Obra/Capítulo` (reparte por obra) y con `Obra/Vol 2/Capítulo`, que además pone el tomo 2.
+    Se ignora lo que va entre corchetes o paréntesis («Choujin X [Scan]») y se compara también con
+    el título alternativo. Si la carpeta no lo dice, se usa el nombre del capítulo («Choujin X Cap 12»).
   - La programación escalonada lleva una secuencia por obra.
+  - Si agregas capítulos cuyo número ya está publicado en su obra (por ejemplo, al retomar una
+    subida que dejaste a medias), pregunta si omitirlos. También compara la cantidad de páginas.
+  - «Numerar desde el último» y «Renumerar en orden desde» piden confirmación antes de cambiar un
+    número que viene del nombre de la carpeta. Si al subir algún número no coincide con su carpeta,
+    se muestra un resumen antes de empezar.
+  - Cada capítulo que termina de subirse sale de la cola y pasa a **Capítulos subidos**. Esa lista se
+    guarda por scan, aunque cierres el programa, hasta que la vacíes.
 
 Desde la 1.3 no hay acceso anticipado: Capibara retiró los capítulos de lectura anticipada.
 
