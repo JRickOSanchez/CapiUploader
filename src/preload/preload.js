@@ -24,6 +24,20 @@ contextBridge.exposeInMainWorld('capi', {
     works: () => invoke('api:works'),
     chapters: (workId) => invoke('api:chapters', workId),
   },
+  // Actualizaciones desde los releases de GitHub: { status, kind, version, percent, download, url, … }
+  update: {
+    state: () => invoke('update:state'),
+    check: () => invoke('update:check'),
+    install: () => invoke('update:install'),
+    onState: (cb) => ipcRenderer.on('update:state', (_e, s) => cb(s)),
+  },
+  // Arreglos de un capítulo ya subido.
+  chapter: {
+    setNumber: (chapterId, number) => invoke('chapter:setNumber', chapterId, number),
+    publish: (chapterId, opts) => invoke('chapter:publish', chapterId, opts),
+    trash: (chapterId) => invoke('chapter:trash', chapterId),
+    restore: (chapterId) => invoke('chapter:restore', chapterId),
+  },
   files: {
     pathFor: (file) => webUtils.getPathForFile(file),
     resolve: (paths) => invoke('files:resolve', paths),

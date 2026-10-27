@@ -33,6 +33,10 @@
     </nav>
 
     <div class="topbar-actions">
+      <button class="update-chip" id="updateChip" type="button" hidden>
+        <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1"/></svg>
+        <span id="updateChipText">Actualización</span>
+      </button>
       <div class="scan-menu" id="scanMenuWrap">
         <button class="scan-chip" id="scanChip" type="button" title="Cambiar de scan" aria-haspopup="menu" aria-expanded="false">
           <span class="dot" id="scanDot"></span>
@@ -658,6 +662,10 @@
         </div>
       </div>
       <ul class="ask-list" id="askList" hidden></ul>
+      <label class="field ask-input" id="askInputWrap" hidden>
+        <span class="label" id="askInputLabel"></span>
+        <input id="askInput" autocomplete="off" spellcheck="false" />
+      </label>
       <div class="modal-actions" id="askActions"></div>
     </div>
   </div>
@@ -699,6 +707,7 @@
   <script src="batch.js"></script>
   <script src="download.js"></script>
   <script src="import.js"></script>
+  <script src="update.js"></script>
   <script src="views.js"></script>
 </body>
 </html>

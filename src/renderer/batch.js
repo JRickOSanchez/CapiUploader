@@ -23,8 +23,13 @@ const batch = {
 
 const UNIT_MS = { minutes: 60e3, hours: 3600e3, days: 864e5, weeks: 7 * 864e5 }
 const YEAR_MS = 365 * 864e5
-const LIMIT_CHAPTERS_PER_HOUR = 60
-const LIMIT_IMAGES_PER_HOUR = 3000
+// Límites por hora del scan; GET /me trae los vigentes y estos son el respaldo.
+const hourLimits = () => ({
+  chapters: state.me?.limits?.chaptersPerHour || 300,
+  images: state.me?.limits?.uploadsPerHour || 15000,
+})
+// Si Capibara frena el lote por un límite, se espera y se reintenta el mismo capítulo hasta estas veces.
+const MAX_RATE_PAUSES = 3
 const ICON_GRIP = '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r=".8"/><circle cx="15" cy="6" r=".8"/><circle cx="9" cy="12" r=".8"/><circle cx="15" cy="12" r=".8"/><circle cx="9" cy="18" r=".8"/><circle cx="15" cy="18" r=".8"/></svg>'
 const ICON_PAGES = '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
 const ICON_BOOK = '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>'
@@ -62,8 +67,10 @@ let askChain = Promise.resolve()
 /**
  * Muestra una pregunta y resuelve con el `value` del botón elegido.
  * Escape o un clic fuera eligen el botón marcado con `cancel`. Las preguntas se encolan.
+ * Con `input` ({ label, value, type }) muestra un campo y resuelve con { value, input }; Enter
+ * en el campo elige el botón principal.
  */
-function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons }) {
+function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, input = null }) {
   const run = () => new Promise((resolve) => {
     const modal = $('#askModal')
     const cancel = buttons.find((b) => b.cancel) || buttons[0]
@@ -76,13 +83,21 @@ function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons }) 
     list.forEach((line) => ul.append(el('li', { text: line })))
     if (more > 0) ul.append(el('li', { class: 'more', text: `…y ${more} más` }))
     ul.hidden = !list.length
+    const field = $('#askInput')
+    $('#askInputWrap').hidden = !input
+    if (input) {
+      $('#askInputLabel').textContent = input.label || ''
+      field.type = input.type || 'text'
+      field.value = input.value ?? ''
+    }
     const actions = $('#askActions')
     actions.innerHTML = ''
     const done = (value) => {
       modal.hidden = true
       document.removeEventListener('keydown', onKey, true)
       modal.removeEventListener('mousedown', onBackdrop)
-      resolve(value)
+      field.onkeydown = null
+      resolve(input ? { value, input: field.value.trim() } : value)
     }
     const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(cancel.value) } }
     const onBackdrop = (e) => { if (e.target === modal) done(cancel.value) }
@@ -97,7 +112,14 @@ function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons }) 
     // El foco va al botón marcado con focus, si no a la opción recomendada y si no a la de cancelar
     // (nunca a una peligrosa).
     const target = buttons.find((b) => b.focus) || buttons.find((b) => b.kind === 'primary') || cancel
-    ;[...actions.querySelectorAll('button')][buttons.indexOf(target)]?.focus()
+    if (input) {
+      const primary = buttons.find((b) => b.kind === 'primary')
+      field.onkeydown = (e) => { if (e.key === 'Enter' && primary) { e.preventDefault(); done(primary.value) } }
+      field.focus()
+      field.select()
+    } else {
+      ;[...actions.querySelectorAll('button')][buttons.indexOf(target)]?.focus()
+    }
   })
   const p = askChain.then(run)
   askChain = p.catch(() => {})
@@ -608,12 +630,16 @@ function pushUploaded(entry) {
   batch.uploaded.unshift(entry)
 }
 
-/** kind: 'uploaded' (lo subió el programa; data = respuesta de la API) o 'existing' (data = capítulo publicado). */
+/**
+ * kind: 'uploaded' (lo subió el programa; data = respuesta de la API), 'existing' (data = capítulo
+ * publicado) o 'trashed' (se mandó a la papelera desde esta lista; trashedFrom guarda el anterior).
+ */
 function uploadedEntry(it, data, kind) {
   const existing = kind === 'existing'
   return {
     kind,
     at: new Date().toISOString(),
+    chapterId: data.id ?? null,
     workId: it.workId,
     workTitle: workById(it.workId)?.title || '',
     number: existing ? Number(data.number) : it.number,
@@ -631,6 +657,7 @@ function uploadedEntry(it, data, kind) {
 }
 
 function uploadedStatus(e) {
+  if (e.kind === 'trashed') return { cls: 'trashed', text: 'En la papelera' }
   if (e.kind === 'existing') return { cls: 'existing', text: 'Ya estaba publicado' }
   if (e.state === 'scheduled' && e.publishAt) return { cls: 'scheduled', text: `Programado · ${formatDate(new Date(e.publishAt))}` }
   return { cls: 'done', text: 'Publicado' }
@@ -639,7 +666,7 @@ function uploadedStatus(e) {
 function uploadedRow(e) {
   const st = uploadedStatus(e)
   const pagesDiffer = e.remotePages != null && e.remotePages !== e.pages
-  return el('li', { class: 'uprow' },
+  return el('li', { class: `uprow${e.kind === 'trashed' ? ' trashed' : ''}` },
     el('div', { class: 'up-cover' }, e.thumb ? el('img', { src: e.thumb, alt: '', loading: 'lazy', decoding: 'async', onerror: (ev) => ev.target.remove() }) : null),
     el('div', { class: 'up-body' },
       el('div', { class: 'up-title' },
@@ -654,9 +681,13 @@ function uploadedRow(e) {
         el('span', { class: 'sep' }),
         el('span', { text: relativeFromNow(new Date(e.at)), title: formatDate(new Date(e.at)) }))),
     el('span', { class: `up-status ${st.cls}`, text: st.text }),
-    e.url
+    e.url && e.kind !== 'trashed'
       ? el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Abrir en Capibara', html: ICON_OPEN, onclick: () => window.capi.system.openExternal(e.url) })
-      : el('span', { class: 'up-noop' }))
+      : el('span', { class: 'up-noop' }),
+    el('button', {
+      type: 'button', class: 'icon-btn small ghost', html: ICON_MORE, onclick: () => uploadedActions(e),
+      title: e.kind === 'trashed' ? 'Restaurar o volver a subir' : 'Cambiar número, publicar ya o mandar a la papelera',
+    }))
 }
 
 function renderUploaded() {
@@ -665,11 +696,13 @@ function renderUploaded() {
   card.hidden = !n
   $('#uploadedCount').textContent = formatNumber(n)
   const existing = batch.uploaded.filter((e) => e.kind === 'existing').length
+  const trashed = batch.uploaded.filter((e) => e.kind === 'trashed').length
   const parts = [
-    n - existing ? plural(n - existing, 'subido con el programa', 'subidos con el programa') : '',
+    n - existing - trashed ? plural(n - existing - trashed, 'subido con el programa', 'subidos con el programa') : '',
     existing ? plural(existing, 'omitido porque ya estaba publicado', 'omitidos porque ya estaban publicados') : '',
+    trashed ? plural(trashed, 'en la papelera', 'en la papelera') : '',
   ].filter(Boolean)
-  $('#uploadedSummary').textContent = `${existing ? `${parts.join(' · ')}. ` : 'Salen de la cola al terminar de subirse. '}Se guardan aunque cierres el programa.`
+  $('#uploadedSummary').textContent = `${existing || trashed ? `${parts.join(' · ')}. ` : 'Salen de la cola al terminar de subirse. '}Se guardan aunque cierres el programa.`
   card.classList.toggle('collapsed', !batch.uploadedOpen)
   $('#uploadedToggle span').textContent = batch.uploadedOpen ? 'Ocultar' : 'Mostrar'
   const list = $('#uploadedList')
@@ -697,6 +730,155 @@ function initUploaded() {
     renderUploaded()
   })
   loadUploaded()
+}
+
+/* ---------- Arreglar un capítulo de la lista de subidos ---------- */
+
+const ICON_MORE = '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>'
+
+/** El id del capítulo en Capibara; las entradas de la 1.3.1 no lo guardaban y se busca por número. */
+async function uploadedChapterId(e) {
+  if (e.chapterId) return e.chapterId
+  const list = await ensureChapters(e.workId)
+  const found = list?.find((c) => Number(c.number) === Number(e.number))
+  if (found) e.chapterId = found.id
+  return found?.id || null
+}
+
+/** Tras un cambio en Capibara: se guarda la lista y se vuelven a leer los capítulos de la obra. */
+function afterUploadedChange(e) {
+  saveUploaded()
+  renderUploaded()
+  ensureChapters(e.workId, { force: true }).then(() => { renderBatch(); batchValidate() })
+  if (state.selectedWork?.id === e.workId) loadChapters()
+}
+
+async function uploadedActions(e) {
+  if (state.uploading) return toast('info', 'Espera a que termine la subida', 'Después podrás arreglar este capítulo.')
+  if (!canWrite(state.me?.key)) return toast('warn', 'No se puede cambiar', 'Esta API key no tiene el permiso chapters:write.')
+  const name = `Cap ${e.number} de «${e.workTitle || 'la obra'}»`
+
+  if (e.kind === 'trashed') {
+    const choice = await ask({
+      kind: 'info',
+      title: `${name} está en la papelera`,
+      text: 'Se puede restaurar durante 30 días desde que se mandó a la papelera. Si quieres subir otra versión, vuelve a poner su carpeta en la cola.',
+      buttons: [
+        { value: 'close', label: 'Cerrar', cancel: true },
+        ...(e.dir ? [{ value: 'requeue', label: 'Poner su carpeta en la cola' }] : []),
+        { value: 'restore', label: 'Restaurar', kind: 'primary' },
+      ],
+    })
+    if (choice === 'restore') return restoreUploaded(e)
+    if (choice === 'requeue') return requeueUploaded(e)
+    return
+  }
+
+  const id = await uploadedChapterId(e)
+  if (!id) return toast('error', 'No se encontró el capítulo', `${name} ya no está en Capibara (¿lo borraron desde el panel?).`)
+  const scheduled = e.state === 'scheduled'
+  const pagesDiffer = e.remotePages != null && e.remotePages !== e.pages
+  const choice = await ask({
+    kind: 'info',
+    title: name,
+    text: [
+      e.kind === 'existing' ? 'Ya estaba publicado en Capibara cuando agregaste su carpeta.' : `Lo subió el programa ${relativeFromNow(new Date(e.at))}.`,
+      pagesDiffer ? `Ojo: la carpeta tiene ${e.pages} páginas y el de Capibara ${e.remotePages}.` : '',
+      'Los cambios no avisan a nadie.',
+    ].filter(Boolean).join(' '),
+    buttons: [
+      { value: 'close', label: 'Cerrar', cancel: true },
+      { value: 'trash', label: 'Mandar a la papelera', kind: 'ghost danger' },
+      ...(scheduled ? [{ value: 'publish', label: 'Publicar ya' }] : []),
+      { value: 'number', label: 'Cambiar número', kind: 'primary' },
+    ],
+  })
+  if (choice === 'number') return renumberUploaded(e, id)
+  if (choice === 'publish') return publishUploaded(e, id)
+  if (choice === 'trash') return trashUploaded(e, id)
+}
+
+async function renumberUploaded(e, id) {
+  const r = await ask({
+    kind: 'info',
+    title: `Cambiar el número del cap ${e.number}`,
+    text: `«${e.workTitle}». Si el número nuevo ya existe en la obra, Capibara no deja cambiarlo.`,
+    input: { label: 'Número nuevo', value: String(e.number), type: 'number' },
+    buttons: [{ value: 'no', label: 'Cancelar', cancel: true }, { value: 'yes', label: 'Cambiar', kind: 'primary' }],
+  })
+  if (r.value !== 'yes') return
+  const n = Number(String(r.input).replace(',', '.'))
+  if (r.input === '' || !Number.isFinite(n) || n < 0) return toast('warn', 'Número no válido', 'Escribe un número, por ejemplo 12 o 12.5.')
+  if (n === Number(e.number)) return
+  const res = await window.capi.chapter.setNumber(id, n)
+  if (!res.ok) return handleApiError(res.error, `No se pudo cambiar el cap ${e.number}`)
+  const old = e.number
+  // Otra entrada de la lista con ese número en la obra era de un capítulo que ya no lo tiene.
+  batch.uploaded = batch.uploaded.filter((x) => x === e || !(x.workId === e.workId && Number(x.number) === n && x.kind !== 'trashed'))
+  e.number = n
+  if (res.data?.url) e.url = res.data.url
+  toast('success', `Cap ${old} → cap ${n}`, `«${e.workTitle}»`)
+  afterUploadedChange(e)
+}
+
+async function publishUploaded(e, id) {
+  const choice = await ask({
+    kind: 'info',
+    title: `¿Publicar ya el cap ${e.number}?`,
+    text: `«${e.workTitle}» estaba programado${e.publishAt ? ` para el ${formatDate(new Date(e.publishAt))}` : ''}.`,
+    buttons: [
+      { value: 'no', label: 'Cancelar', cancel: true },
+      { value: 'quiet', label: 'Publicar sin avisos' },
+      { value: 'notify', label: 'Publicar y avisar', kind: 'primary' },
+    ],
+  })
+  if (choice !== 'quiet' && choice !== 'notify') return
+  const res = await window.capi.chapter.publish(id, { notify: choice === 'notify' })
+  if (!res.ok) return handleApiError(res.error, `No se pudo publicar el cap ${e.number}`)
+  e.state = 'published'
+  e.publishAt = null
+  toast('success', `Cap ${e.number} publicado`, choice === 'notify' ? 'Salieron los avisos de siempre.' : 'Sin avisos.')
+  afterUploadedChange(e)
+}
+
+async function trashUploaded(e, id) {
+  const choice = await ask({
+    kind: 'warn',
+    title: `¿Mandar el cap ${e.number} a la papelera?`,
+    text: `«${e.workTitle}». Deja de verse en Capibara y su número queda libre. Se puede restaurar durante 30 días, aquí o desde el panel.`,
+    buttons: [{ value: 'no', label: 'Cancelar', cancel: true, focus: true }, { value: 'yes', label: 'Mandar a la papelera', kind: 'danger-solid' }],
+  })
+  if (choice !== 'yes') return
+  const res = await window.capi.chapter.trash(id)
+  if (!res.ok) return handleApiError(res.error, `No se pudo borrar el cap ${e.number}`)
+  e.trashedFrom = e.kind
+  e.kind = 'trashed'
+  e.trashedAt = new Date().toISOString()
+  toast('success', `Cap ${e.number} en la papelera`, 'Puedes restaurarlo o volver a poner su carpeta en la cola desde esta lista.')
+  afterUploadedChange(e)
+}
+
+async function restoreUploaded(e) {
+  const id = e.chapterId
+  if (!id) return toast('error', 'No se puede restaurar desde aquí', 'Restáuralo desde la papelera del panel.')
+  const res = await window.capi.chapter.restore(id)
+  if (!res.ok) return handleApiError(res.error, `No se pudo restaurar el cap ${e.number}`)
+  e.kind = e.trashedFrom || 'uploaded'
+  delete e.trashedFrom
+  delete e.trashedAt
+  toast('success', `Cap ${e.number} restaurado`, `«${e.workTitle}»`)
+  afterUploadedChange(e)
+}
+
+/** Vuelve a poner la carpeta en la cola, con su obra; la entrada sale de la lista de subidos. */
+async function requeueUploaded(e) {
+  const res = await window.capi.files.resolveChapters([e.dir])
+  if (!res.ok) return toast('error', 'No se pudo leer la carpeta', res.error.message)
+  if (!res.data.chapters.length) return toast('warn', 'La carpeta ya no tiene páginas', e.dir)
+  batch.uploaded = batch.uploaded.filter((x) => x !== e)
+  saveUploaded()
+  renderUploaded()
+  await addChapters(res.data, { workId: e.workId })
 }
 
 /** La obra elegida arriba es la predeterminada para lo que no tenga obra. */
@@ -880,8 +1062,9 @@ function renderBatchSummary(plan, errors) {
     ? `Programados desde ${formatDate(plan.base)}${queue.length > 1 ? (plan.step ? ` · uno ${every(plan.intervalVal, plan.unit)} por obra` : ' · todos a la vez') : ''}`
     : 'Se publican conforme terminan de subirse'
   if (!plan.notify) t += ' · Sin avisos'
-  if (queue.length > LIMIT_CHAPTERS_PER_HOUR || pages > LIMIT_IMAGES_PER_HOUR) {
-    t += ` · Ojo: supera el límite por hora del scan (${LIMIT_CHAPTERS_PER_HOUR} capítulos / ${formatNumber(LIMIT_IMAGES_PER_HOUR)} imágenes)`
+  const lim = hourLimits()
+  if (queue.length > lim.chapters || pages > lim.images) {
+    t += ` · Supera el límite por hora del scan (${formatNumber(lim.chapters)} capítulos / ${formatNumber(lim.images)} imágenes): la subida se pausará sola hasta que se libere`
   }
   sub.textContent = t
 }
@@ -1346,7 +1529,7 @@ async function batchStart() {
   if (!(await confirmNumbering(queue))) return
   const scanName = activeProfile()?.name || 'tu scan'
   const workIds = [...new Set(queue.map((i) => i.workId))]
-  for (const it of queue) { it.status = 'pending'; it.error = ''; it.progress = 0 }
+  for (const it of queue) { it.status = 'pending'; it.error = ''; it.progress = 0; it.ratePauses = 0 }
   batch.cancelled = false
   setUploadingUI(true)
   renderBatch()
@@ -1429,9 +1612,19 @@ async function batchStart() {
       it.status = 'pending'
       it.progress = 0
       stopped = true
+    } else if (res.error.code === 'api.rate_limited' && res.error.retryAfter && it.ratePauses < MAX_RATE_PAUSES) {
+      // Un límite por hora: se espera lo que dice Capibara y se reintenta este mismo capítulo
+      // (las páginas ya subidas se reutilizan).
+      it.ratePauses++
+      it.status = 'pending'
+      it.progress = 0
+      updateRowStatus(it)
+      bytesBefore -= sumSize(it.files)
+      if (await waitRateLimit(res.error)) { pos--; continue }
+      stopped = true
     } else {
       it.status = 'error'
-      it.error = res.error.message
+      it.error = withTrace(res.error)
       failed++
       tally.failed++
       if (res.error.code === 'api.key_invalid' || res.error.code === 'api.key_missing') {
@@ -1459,6 +1652,20 @@ async function batchStart() {
     return
   }
   showBatchDone(plan, perWork, { ok, failed, pending })
+}
+
+/** Espera a que Capibara libere el límite, con cuenta atrás en la barra. false si se canceló. */
+async function waitRateLimit(error) {
+  const until = Date.now() + (error.retryAfter + 3) * 1000
+  const at = new Date(until).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  toast('warn', 'Subida en pausa', `${error.message} Sigue sola a las ${at}; puedes dejar el programa abierto.`, 12000)
+  while (Date.now() < until) {
+    if (batch.cancelled) return false
+    const left = Math.ceil((until - Date.now()) / 1000)
+    $('#progressText').textContent = `En pausa por un límite de Capibara · sigue a las ${at} (falta ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')})`
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  return !batch.cancelled
 }
 
 /**

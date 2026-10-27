@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Ícono de CapiUploader: el logo de la barra superior (flecha de subida en un círculo cian)
+       sobre el fondo oscuro de la app. scripts/build-icon.cjs lo convierte a icon.png e icon.ico. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d2028"/>
+      <stop offset="1" stop-color="#0a0a0d"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3cc8e8" stop-opacity=".55"/>
+      <stop offset=".5" stop-color="#3cc8e8" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#3cc8e8" stop-opacity=".3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+      <stop offset=".55" stop-color="#12b5d9" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#12b5d9" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="disc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fd2ef"/>
+      <stop offset="1" stop-color="#0a9fc4"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#bg)"/>
+  <rect x="17.5" y="17.5" width="477" height="477" rx="114.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+  <circle cx="256" cy="256" r="205" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="150" fill="url(#disc)"/>
+  <path d="M120 256a136 136 0 0 1 222-105" fill="none" stroke="#fff" stroke-opacity=".22" stroke-width="6" stroke-linecap="round"/>
+  <g transform="translate(166 166) scale(7.5)" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v12m0-12 4.5 4.5M12 3 7.5 7.5M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/>
+  </g>
+</svg>

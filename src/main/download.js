@@ -2,8 +2,9 @@
  * «Descargar de Capibara»: baja las páginas de capítulos de las obras del scan activo.
  *
  * Cada capítulo queda en `destino/Obra/Vol 3 Cap 12 - Título/001.jpg…`, el mismo formato que
- * lee «Varios capítulos», así que la carpeta se puede volver a subir tal cual. Un archivo
- * `.capiuploader.json` marca los capítulos completos para saltarlos si se repite la descarga.
+ * lee «Varios capítulos», así que la carpeta se puede volver a subir tal cual. Si se repite la
+ * descarga, se saltan los capítulos que ya tienen todas sus páginas en el formato elegido. No se
+ * deja ningún archivo aparte de las páginas, para poder subir las carpetas tal cual (p. ej. a un Drive).
  *
  * Capibara guarda las páginas en WEBP; se pueden convertir a JPG (calidad 92) o PNG, o dejar
  * el original.
@@ -14,7 +15,7 @@ const api = require('./api')
 const { fetchImage, pool, safeName, chapterFolderName, writePage, cancelled } = require('./images')
 
 const PAGE_CONCURRENCY = 4
-const MARKER = '.capiuploader.json'
+const LEGACY_MARKER = '.capiuploader.json'
 const JPG_QUALITY = 0.92
 const FORMATS = { original: null, jpg: '.jpg', png: '.png' }
 
@@ -24,26 +25,39 @@ async function convertWithEngine(buffer, format) {
   return Buffer.from(bytes)
 }
 
-async function readMarker(dir) {
-  try { return JSON.parse(await fs.readFile(path.join(dir, MARKER), 'utf8')) } catch { return null }
-}
+const PAGE_RE = /^\d+\.(jpg|png|gif|webp|avif)$/i
 
-/** ¿Ya está completo en este formato? El marcador coincide y siguen ahí todas las páginas. */
-async function isComplete(dir, chapterId, format) {
-  const m = await readMarker(dir)
-  if (!m || m.chapterId !== chapterId || !Array.isArray(m.files) || (m.format || 'original') !== format) return false
-  for (const f of m.files) {
-    const st = await fs.stat(path.join(dir, f)).catch(() => null)
+/**
+ * ¿Ya está completo en este formato? Están las `total` páginas (001, 002…) con la extensión del
+ * formato, ninguna vacía y ninguna de más. Las páginas se escriben a un `.part` y se renombran al
+ * terminar, así que una descarga cortada deja páginas de menos (o un `.part`) y se repite.
+ */
+async function isComplete(dir, total, format) {
+  if (!Number.isInteger(total) || total < 1) return false
+  const names = await fs.readdir(dir).catch(() => null)
+  if (!names || names.some((n) => /\.part$/i.test(n))) return false
+  const pages = names.filter((n) => PAGE_RE.test(n))
+  if (pages.length !== total) return false
+  const ext = FORMATS[format]
+  const width = Math.max(3, String(total).length)
+  for (let i = 1; i <= total; i++) {
+    const num = String(i).padStart(width, '0')
+    const name = pages.find((n) => path.parse(n).name === num && (!ext || path.extname(n).toLowerCase() === ext))
+    if (!name) return false
+    const st = await fs.stat(path.join(dir, name)).catch(() => null)
     if (!st?.size) return false
   }
   return true
 }
 
+/** Las versiones 1.3.0 y 1.3.1 dejaban este archivo en cada capítulo; se borra al pasar por ahí. */
+const removeLegacyMarker = (dir) => fs.rm(path.join(dir, LEGACY_MARKER), { force: true }).catch(() => {})
+
 /**
  * @param {object} o
  * @param {string} o.key        API key del scan activo
  * @param {{ id, title }} o.work
- * @param {Array<{ id, number, volumeNumber, title }>} o.chapters
+ * @param {Array<{ id, number, volumeNumber, title, pages }>} o.chapters  pages: cuántas tiene según la lista de la obra
  * @param {string} o.dest       carpeta elegida por el usuario
  * @param {'original' | 'jpg' | 'png'} o.format
  * @param {(p: object) => void} o.onProgress
@@ -61,7 +75,8 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
     const dir = path.join(workDir, chapterFolderName(ch))
     const base = { chapterId: ch.id, position: c, count: chapters.length }
 
-    if (await isComplete(dir, ch.id, format)) {
+    if (await isComplete(dir, ch.pages, format)) {
+      await removeLegacyMarker(dir)
       summary.skipped++
       onProgress({ ...base, status: 'skipped', dir })
       continue
@@ -72,7 +87,20 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
       const res = await api.request(key, 'GET', `/chapters/${Number(ch.id)}/pages`, null, signal)
       const pages = [...(res.data?.pages || [])].sort((a, b) => a.number - b.number)
       if (!pages.length) throw new Error('El capítulo no tiene páginas.')
+      if (pages.every((p) => !p.imageUrl)) {
+        // Capibara solo da las imágenes a claves con chapters:write.
+        const err = new Error('Esta API key no puede ver las imágenes: para descargar necesita el permiso chapters:write.')
+        err.code = 'api.scope_missing'
+        throw err
+      }
       if (pages.some((p) => !p.imageUrl)) throw new Error('La API no devolvió la dirección de alguna página.')
+      await removeLegacyMarker(dir)
+      // La lista de la obra no traía el número de páginas (o no coincidía): se revisa con el real.
+      if (ch.pages !== pages.length && await isComplete(dir, pages.length, format)) {
+        summary.skipped++
+        onProgress({ ...base, status: 'skipped', dir })
+        continue
+      }
       await fs.mkdir(dir, { recursive: true })
 
       const files = new Array(pages.length)
@@ -93,17 +121,16 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
       }, signal)
 
       // Restos de una descarga anterior con otro formato u otro número de páginas.
-      const keep = new Set([...files, MARKER])
+      const keep = new Set(files)
       for (const name of await fs.readdir(dir)) {
         if (!keep.has(name) && /^\d+\.(jpg|png|gif|webp|avif)(\.part)?$/i.test(name)) await fs.rm(path.join(dir, name), { force: true })
       }
-      await fs.writeFile(path.join(dir, MARKER), JSON.stringify({ chapterId: ch.id, workId: work.id, number: ch.number, format, files }, null, 2))
       summary.done++
       summary.pages += pages.length
       onProgress({ ...base, status: 'done', dir, total: pages.length })
     } catch (err) {
       if (signal.aborted || err.code === 'cancelled') throw cancelled()
-      if (err.code === 'api.key_invalid' || err.code === 'api.key_missing') throw err
+      if (['api.key_invalid', 'api.key_missing', 'api.scope_missing', 'api.rate_limited'].includes(err.code)) throw err
       await fs.rmdir(dir).catch(() => {}) // solo si quedó vacía
       summary.failed.push({ chapterId: ch.id, number: ch.number, error: err.message })
       onProgress({ ...base, status: 'error', error: err.message })

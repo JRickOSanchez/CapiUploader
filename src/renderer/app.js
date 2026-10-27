@@ -1159,8 +1159,11 @@ function handleApiError(error, title) {
     })
     return
   }
-  toast('error', title, error.message, 8000)
+  toast('error', title, withTrace(error), 8000)
 }
+
+/** Mensaje con el código de rastreo de Capibara, para mandarlo a soporte si el error no queda claro. */
+const withTrace = (error) => (error.traceId ? `${error.message} (código ${error.traceId})` : error.message)
 
 function setUploadingUI(on) {
   state.uploading = on
@@ -1240,7 +1243,7 @@ async function startUpload() {
       toast('info', 'Subida cancelada', 'Las páginas ya subidas se reutilizarán si vuelves a intentarlo pronto.')
       return
     }
-    if (res.error.code === 'api.conflict') {
+    if (res.error.code === 'api.conflict' || res.error.code === 'api.chapter_exists') {
       $('#chNumber').classList.add('invalid')
       setHint('#chNumberHint', res.error.message, 'error')
       $('#chNumber').focus()

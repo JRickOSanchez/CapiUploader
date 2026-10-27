@@ -8,6 +8,7 @@ const psd = require('./psd')
 const { downloadChapters } = require('./download')
 const scrape = require('./scrape')
 const importer = require('./importer')
+const updater = require('./updater')
 
 // Solo en desarrollo (sin empaquetar): las pruebas usan su propia carpeta de configuración
 // para no tocar nunca la del usuario. La app instalada ignora esta variable.
@@ -79,7 +80,13 @@ function handle(channel, fn) {
       return { ok: true, data: await fn(...args) }
     } catch (err) {
       markActiveIfInvalid(err)
-      return { ok: false, error: { message: err.message, code: err.code || null, status: err.status || null } }
+      return {
+        ok: false,
+        error: {
+          message: err.message, code: err.code || null, status: err.status || null,
+          traceId: err.traceId || null, retryAfter: err.retryAfter ?? null, limit: err.limit || null,
+        },
+      }
     }
   })
 }
@@ -202,6 +209,12 @@ handle('shell:open', async (url) => {
   return true
 })
 
+// ---------- Actualizaciones ----------
+
+handle('update:state', async () => updater.state())
+handle('update:check', async () => updater.check({ manual: true }))
+handle('update:install', async () => updater.install())
+
 // ---------- API: lectura ----------
 
 handle('api:me', async () => (await api.request(requireKey(), 'GET', '/me')).data)
@@ -233,6 +246,24 @@ handle('api:chapters', async (workId) => {
   } while (page <= pages)
   return all
 })
+
+// Arreglos de un capítulo ya subido (desde «Capítulos subidos»). Ninguno avisa a nadie, salvo
+// «Publicar ya» con notify. La papelera se restaura durante 30 días.
+const chapterPath = (chapterId) => {
+  const id = Number(chapterId)
+  if (!Number.isInteger(id) || id < 1) throw new Error('Capítulo no válido.')
+  return `/chapters/${id}`
+}
+
+handle('chapter:setNumber', async (chapterId, number) => {
+  const n = Number(number)
+  if (!Number.isFinite(n) || n < 0) throw new Error('Número de capítulo no válido.')
+  return (await api.request(requireKey(), 'PATCH', chapterPath(chapterId), { number: n })).data
+})
+handle('chapter:publish', async (chapterId, { notify = true } = {}) =>
+  (await api.request(requireKey(), 'POST', `${chapterPath(chapterId)}/publish`, { notify: notify !== false })).data)
+handle('chapter:trash', async (chapterId) => (await api.request(requireKey(), 'DELETE', chapterPath(chapterId))).data)
+handle('chapter:restore', async (chapterId) => (await api.request(requireKey(), 'POST', `${chapterPath(chapterId)}/restore`)).data)
 
 // ---------- Archivos ----------
 
@@ -632,6 +663,7 @@ handle('download:start', async ({ work, chapters, dest, format } = {}) => {
     const target = typeof dest === 'string' && path.isAbsolute(dest) ? dest : defaultDownloadDir()
     const list = chapters.map((c) => ({
       id: Number(c.id), number: c.number, volumeNumber: c.volumeNumber ?? null, title: c.title || '',
+      pages: Number.isInteger(c.pages) ? c.pages : null,
     })).filter((c) => Number.isInteger(c.id))
     const summary = await downloadChapters({
       key,
@@ -716,6 +748,7 @@ app.whenReady().then(() => {
   migrateLegacy()
   createWindow()
   scrape.init(win)
+  updater.init((s) => win?.webContents.send('update:state', s))
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

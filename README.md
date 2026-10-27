@@ -38,6 +38,11 @@ importación o descarga sigue en marcha aunque cambies de sección (la pestaña 
     se muestra un resumen antes de empezar.
   - Cada capítulo que termina de subirse sale de la cola y pasa a **Capítulos subidos**. Esa lista se
     guarda por scan, aunque cierres el programa, hasta que la vacíes.
+  - El botón «⋯» de cada fila de «Capítulos subidos» sirve para **cambiar el número**, **publicar ya**
+    uno programado o **mandarlo a la papelera**. Desde la papelera se puede restaurar (30 días) o volver
+    a poner su carpeta en la cola. Nada de esto avisa a nadie, salvo «Publicar y avisar».
+  - Si Capibara frena el lote por un límite por hora (por ejemplo, 300 capítulos por hora por scan), la
+    subida se pausa con una cuenta atrás y sigue sola con el mismo capítulo.
 
 Desde la 1.3 no hay acceso anticipado: Capibara retiró los capítulos de lectura anticipada.
 
@@ -69,10 +74,13 @@ protección muy estricta no dejan entrar ni así: la app lo avisa. El registro
 
 ### Descargar
 
-Baja capítulos de las obras del scan activo con su API key: se elige la obra, los capítulos (todos,
+Baja capítulos de las obras del scan activo con su API key, que necesita el permiso `chapters:write`
+(Capibara solo da las imágenes de las páginas a esas claves). Se elige la obra, los capítulos (todos,
 un tramo o sueltos), la carpeta y el formato: JPG (calidad 92, por defecto), PNG o el WEBP original de
 Capibara. Cada capítulo queda en `Obra/Vol 3 Cap 12 - Título/001.jpg…`, el
-formato que lee «Varios capítulos», y lleva un `.capiuploader.json` para saltarlo si se repite la descarga.
+formato que lee «Varios capítulos». Si se repite la descarga, se saltan los capítulos que ya tienen
+todas sus páginas en ese formato. En la carpeta solo quedan las imágenes, así que se puede subir tal
+cual a un Drive. Las versiones 1.3.0 y 1.3.1 dejaban un `.capiuploader.json`, que se borra al volver a descargar.
 
 ## Archivos de Photoshop (PSD)
 
@@ -108,8 +116,25 @@ El motor corre en una ventana oculta con su propia sesión (`persist:scrape`), s
 ## Generar instalador
 
 ```bash
-npm run dist   # crea el instalador, el portable y el .zip en dist/
+npm run dist   # crea el instalador, el portable y el .zip en dist/ (nunca publica nada)
+npm run icons  # vuelve a generar build/icon.png, build/icon.ico y el de la ventana desde build/icon.svg
 ```
+
+El ícono sale de `build/icon.svg`; para 16–32 px se usa `build/icon-small.svg`, más simple.
+
+## Actualizaciones
+
+La app busca una versión nueva en los releases de GitHub (`JRickOSanchez/CapiUploader`) al abrirse y
+cada 6 horas. Si la hay, aparece un botón en la barra superior.
+
+- **Instalada con el Setup**: la baja sola en segundo plano y la instala al cerrar el programa, o al
+  pulsar «Reiniciar y actualizar». Para eso el release debe traer **`latest.yml`** y el
+  `CapiUploader-Setup-x.y.z.exe` (con su `.blockmap`) tal como salen de `dist/`. Si falta `latest.yml`,
+  avisa y ofrece descargar el instalador.
+- **Portable o .zip**: avisa y abre la descarga del archivo nuevo, que reemplaza al anterior.
+
+Los scans y ajustes se conservan en todos los casos (`%APPDATA%CapiUploader`). La app no está firmada, así
+que no se comprueba el editor del instalador; sí su sha512, que viene en `latest.yml`.
 
 ## Cómo funciona
 
@@ -118,7 +143,10 @@ npm run dist   # crea el instalador, el portable y el .zip en dist/
 3. `POST /works/:id/chapters` crea el capítulo con las claves en orden de lectura.
 
 Si la creación falla (p. ej. número repetido), las páginas ya subidas se reutilizan durante 45 min al
-reintentar. Las peticiones a la API reintentan solas ante `429` (respetando `Retry-After`) y errores `5xx`.
+reintentar. Las peticiones a la API reintentan solas ante errores `5xx` y ante un `429` con una espera
+corta (hasta 60 s de `Retry-After`). Uno con una espera larga (límites por hora o por día) devuelve el
+error con `retryAfter`, y «Varios capítulos» se pausa hasta entonces. Los errores muestran el código de
+rastreo (`traceId`) de Capibara para mandarlo a soporte.
 
 Las API keys viven solo en el proceso principal; la interfaz nunca las ve.
 
@@ -126,16 +154,20 @@ Las API keys viven solo en el proceso principal; la interfaz nunca las ve.
 
 Sin empaquetar, la variable `CAPI_USER_DATA_DIR` cambia la carpeta de configuración para que las
 pruebas no toquen la del usuario, y `CAPI_TUNNEL_TEST=<url>` fuerza el túnel del navegador para ese
-sitio (sirve para probar el modo Cloudflare con una web que no lo tiene). La app instalada las ignora.
+sitio (sirve para probar el modo Cloudflare con una web que no lo tiene). `CAPI_UPDATE_TEST=1.3.0` hace
+como si la app fuera esa versión del .zip, para probar el aviso de actualización contra los releases
+reales. La app instalada las ignora.
 
 ## Estructura
 
 - `src/main/` — proceso principal: cliente de la API, scans y claves, flujo de subida. `psd.js` convierte los PSD.
   `download.js` es «Descargar»; `scrape.js`, `importer.js` y `cfbridge.js` son «Importar de web»
-  (motor, descarga de capítulos y Cloudflare); `images.js` tiene lo común para bajar imágenes.
+  (motor, descarga de capítulos y Cloudflare); `images.js` tiene lo común para bajar imágenes y
+  `updater.js` busca e instala actualizaciones.
 - `src/preload/` — puente seguro (`window.capi`) entre la UI y el proceso principal.
 - `src/renderer/` — interfaz (HTML/CSS/JS sin frameworks). `batch.js` es el modo «Varios capítulos»,
-  `import.js` y `download.js` las secciones nuevas y `views.js` cambia entre secciones.
+  `import.js` y `download.js` las secciones nuevas, `views.js` cambia entre secciones y `update.js` es el
+  aviso de actualización.
 - `src/scraper/` — motor de HaruNeko compilado (Unlicense, ver `HARUNEKO-UNLICENSE`) y su ventana.
-- `scripts/` — `build-scraper.mjs` compila el motor.
+- `scripts/` — `build-scraper.mjs` compila el motor y `build-icon.cjs` genera los íconos.
 - `vendor/psdc/` — conversor de PSD (MIT) que se incluye en el instalador.

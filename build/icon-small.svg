@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Variante de icon.svg para 16–32 px: sin brillos, círculo más grande y trazo más grueso. -->
+  <defs>
+    <linearGradient id="disc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fd2ef"/>
+      <stop offset="1" stop-color="#0a9fc4"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="120" fill="#15171c"/>
+  <circle cx="256" cy="256" r="200" fill="url(#disc)"/>
+  <g transform="translate(136 136) scale(10)" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v12m0-12 4.5 4.5M12 3 7.5 7.5M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/>
+  </g>
+</svg>

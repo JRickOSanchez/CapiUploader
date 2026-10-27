@@ -152,6 +152,10 @@ function updateDlRow(id) {
   if (c && old) old.replaceWith(dlRow(c))
 }
 
+// Capibara solo da las imágenes de las páginas a claves con chapters:write.
+const dlNoScope = () => Boolean(state.me && !canWrite(state.me.key))
+const DL_SCOPE_TEXT = 'Esta API key no tiene el permiso chapters:write: Capibara solo deja descargar las páginas con ese permiso.'
+
 function renderDlSummary() {
   const work = dlWork()
   const chosen = dlChosen()
@@ -160,11 +164,11 @@ function renderDlSummary() {
     $('#dlSummaryMain').textContent = work
       ? chosen.length ? `${work.title} · ${plural(chosen.length, 'capítulo', 'capítulos')}${pages ? ` · ${formatNumber(pages)} pág.` : ''}` : `${work.title} · ningún capítulo marcado`
       : 'Elige una obra y sus capítulos'
-    $('#dlSummarySub').className = 'summary-sub'
-    $('#dlSummarySub').textContent = dl.dest ? `En ${dl.dest}` : ''
+    $('#dlSummarySub').className = `summary-sub${dlNoScope() ? ' error' : ''}`
+    $('#dlSummarySub').textContent = dlNoScope() ? DL_SCOPE_TEXT : dl.dest ? `En ${dl.dest}` : ''
   }
   $('#dlStartText').textContent = dl.running ? 'Descargando…' : chosen.length > 1 ? `Descargar ${chosen.length} capítulos` : 'Descargar'
-  $('#dlStartBtn').disabled = dl.running || !chosen.length || !state.hasKey
+  $('#dlStartBtn').disabled = dl.running || !chosen.length || !state.hasKey || dlNoScope()
 }
 
 /* ---------- Destino ---------- */
@@ -197,6 +201,7 @@ async function dlStart() {
   const chosen = dlChosen()
   if (!work || !chosen.length || dl.running) return
   if (!state.hasKey) return openKeyModal(true)
+  if (dlNoScope()) return toast('error', 'No se puede descargar', DL_SCOPE_TEXT, 8000)
   dl.rows.clear()
   for (const c of chosen) dl.rows.set(c.id, { status: 'queued' })
   dl.lastDir = null
@@ -224,7 +229,7 @@ async function dlStart() {
 
   const res = await window.capi.download.start({
     work: { id: work.id, title: work.title },
-    chapters: chosen.map((c) => ({ id: c.id, number: c.number, volumeNumber: c.volumeNumber ?? null, title: c.title || '' })),
+    chapters: chosen.map((c) => ({ id: c.id, number: c.number, volumeNumber: c.volumeNumber ?? null, title: c.title || '', pages: c.pages ?? null })),
     dest: dl.dest,
     format: $('#dlFormat').value,
   })

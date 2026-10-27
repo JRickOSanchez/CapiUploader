@@ -1,5 +1,20 @@
 const BASE = 'https://capibaratraductor.com/api/v1'
 const MAX_RETRIES = 3
+// Un 429 con una espera corta (límite por minuto) se reintenta aquí; uno largo (límites por hora o por
+// día) se devuelve como error con retryAfter para que quien llama decida (el lote se pausa solo).
+const MAX_INLINE_WAIT_S = 60
+
+const LIMIT_TEXT = {
+  perMinute: 'peticiones por minuto de la clave',
+  perDay: 'peticiones por día de la clave',
+  scanPerMinute: 'peticiones por minuto del scan',
+  chaptersPerHour: 'capítulos creados por hora',
+  uploadsPerHour: 'imágenes subidas por hora',
+  chapterEditsPerHour: 'ediciones de capítulos por hora',
+  pageEditsPerHour: 'ediciones de páginas por hora',
+  pagesDeletedPerHour: 'páginas quitadas por hora',
+  chapterVisibilityPerHour: 'capítulos ocultados, borrados o restaurados por hora',
+}
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms)
@@ -7,11 +22,23 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 })
 
 class ApiError extends Error {
-  constructor(message, code, status) {
+  constructor(message, code, status, extra = {}) {
     super(message)
     this.code = code
     this.status = status
+    // traceId: código de rastreo de Capibara para soporte. retryAfter (s) y limit: en api.rate_limited.
+    Object.assign(this, extra)
   }
+}
+
+/** «Vuelve a intentar en 616 s» → «Capibara limita los capítulos creados por hora. Se libera en 11 min.» */
+function rateLimitError(json, res) {
+  const retryAfter = Number(json?.data?.retryAfter) || Number(res.headers.get('retry-after')) || 60
+  const limit = json?.data?.limit || null
+  const mins = Math.ceil(retryAfter / 60)
+  const what = LIMIT_TEXT[limit] ? `Capibara limita los ${LIMIT_TEXT[limit]}` : 'Se pasó un límite de Capibara'
+  return new ApiError(`${what}. Se libera en ${retryAfter < 90 ? `${retryAfter} s` : `${mins} min`}.`, 'api.rate_limited', 429,
+    { retryAfter, limit, traceId: json?.traceId || res.headers.get('x-trace-id') || null })
 }
 
 /** Petición a la API con reintentos ante 429 (Retry-After) y errores 5xx / de red. */
@@ -38,10 +65,13 @@ async function request(key, method, path, body, signal) {
       throw lastErr
     }
 
-    if (res.status === 429 && attempt < MAX_RETRIES) {
+    if (res.status === 429) {
       const wait = Number(res.headers.get('retry-after')) || 5
-      await sleep(Math.min(wait, 120) * 1000, signal)
-      continue
+      if (wait <= MAX_INLINE_WAIT_S && attempt < MAX_RETRIES) {
+        await sleep(wait * 1000, signal)
+        continue
+      }
+      throw rateLimitError(await res.json().catch(() => null), res)
     }
     if (res.status >= 500 && attempt < MAX_RETRIES) {
       await sleep(1000 * 2 ** attempt, signal)
@@ -54,6 +84,7 @@ async function request(key, method, path, body, signal) {
         json?.message || `Error HTTP ${res.status}`,
         json?.errorCode || 'http_error',
         res.status,
+        { traceId: json?.traceId || res.headers.get('x-trace-id') || null, data: json?.data ?? null },
       )
     }
     return json
