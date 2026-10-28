@@ -57,7 +57,7 @@ const removeLegacyMarker = (dir) => fs.rm(path.join(dir, LEGACY_MARKER), { force
  * @param {object} o
  * @param {string} o.key        API key del scan activo
  * @param {{ id, title }} o.work
- * @param {Array<{ id, number, volumeNumber, title, pages }>} o.chapters  pages: cuántas tiene según la lista de la obra
+ * @param {Array<{ id, number, volumeNumber, title, pages, extra, extraNumber }>} o.chapters  pages: cuántas tiene según la lista de la obra
  * @param {string} o.dest       carpeta elegida por el usuario
  * @param {'original' | 'jpg' | 'png'} o.format
  * @param {(p: object) => void} o.onProgress

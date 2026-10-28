@@ -170,7 +170,7 @@
 
         <div class="grid-2">
           <label class="field">
-            <span class="label">Número de capítulo <em>*</em></span>
+            <span class="label"><span id="chNumberLabel">Número de capítulo</span> <em>*</em></span>
             <input type="number" id="chNumber" step="any" min="0" placeholder="Ej. 13 o 12.5" />
             <span class="hint" id="chNumberHint"></span>
           </label>
@@ -184,6 +184,13 @@
           <span class="label">Título del capítulo <span class="counter" id="titleCounter">0/256</span></span>
           <input type="text" id="chTitle" maxlength="256" placeholder="Opcional — p. ej. «El regreso»" />
         </label>
+        <div class="option">
+          <div class="option-text">
+            <span class="option-title">Es un extra (arte, ilustración, contenido fuera de capítulos)</span>
+            <span class="option-desc">Se muestra como «Extra N» y no cuenta como capítulo. Los extras llevan su propia numeración.</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="extraToggle" /><span></span></label>
+        </div>
       </div>
 
       <!-- Publicación -->

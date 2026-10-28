@@ -7,8 +7,9 @@
    ========================================================= */
 const batch = {
   // { id, name, dir, parent, files, workId, workGuess, number, numberAuto, volume, volumeAuto, title,
-  //   parsedNumber, numberSource, keptPublished, status, progress, error, result, refs }
+  //   extra, parsedExtra, parsedNumber, numberSource, keptPublished, status, progress, error, result, refs }
   // parsedNumber: el número que trae el nombre de la carpeta (null si no trae).
+  // extra: se sube como «Extra N» (numeración aparte); parsedExtra: la carpeta dice «Extra», «Omake»…
   // numberSource: 'folder' | 'auto' (siguiente libre) | 'manual' | 'renumber'
   items: [],
   seq: 0,
@@ -128,9 +129,13 @@ function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, in
 
 /* ---------- Detección de número, tomo y título ---------- */
 
+// «Extra 2», «Especial», «Omake 1», «Bonus»… Solo cuenta si va antes del «Cap N», para no tomar
+// como extra un «Cap 12 - Un día especial».
+const EXTRA_RE = /\b(?:extras?|especial(?:es)?|specials?|omake|bonus)\b(?:\s*[.#:-]?\s*(\d+(?:[.,]\d+)?))?/i
+
 /**
  * Interpreta nombres de carpeta como «Cap 12», «Capítulo 12.5 - El regreso»,
- * «Vol 3 Ch 20», «[Scan] Kirara 015» o «013».
+ * «Vol 3 Ch 20», «[Scan] Kirara 015», «013» o «Extra 2 - Ilustraciones».
  */
 function parseChapterName(raw) {
   const name = raw.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -144,8 +149,17 @@ function parseChapterName(raw) {
 
   const vol = clean.match(volRe)
   const cap = clean.match(capRe)
+  const ex = clean.match(EXTRA_RE)
   let number = null
   let title = ''
+  if (ex && (!cap || ex.index < cap.index)) {
+    return {
+      number: ex[1] ? parseFloat(ex[1].replace(',', '.')) : null,
+      volume: vol ? parseInt(vol[1], 10) : null,
+      title: titleAfter(clean.slice(ex.index + ex[0].length)),
+      extra: true,
+    }
+  }
   if (cap) {
     number = parseFloat(cap[1].replace(',', '.'))
     title = titleAfter(clean.slice(cap.index + cap[0].length))
@@ -159,7 +173,7 @@ function parseChapterName(raw) {
       title = titleAfter(withoutVol.slice(pick.index + pick[0].length))
     }
   }
-  return { number, volume: vol ? parseInt(vol[1], 10) : null, title }
+  return { number, volume: vol ? parseInt(vol[1], 10) : null, title, extra: false }
 }
 
 /* ---------- Detección de la obra por el nombre de la carpeta ---------- */
@@ -220,9 +234,12 @@ const cleanFolderName = (raw) => String(raw || '').replace(/_+/g, ' ').replace(/
 /** La parte del nombre de un capítulo que nombra a la obra: «Choujin X Cap 12 - Título» → «Choujin X». */
 function workHintFromName(raw) {
   let s = cleanFolderName(raw)
+  // «Choujin X Extra 2» → «Choujin X»
+  const ex = s.match(EXTRA_RE)
+  if (ex) s = s.slice(0, ex.index)
   const cap = s.match(CAP_RE)
   if (cap) s = s.slice(0, cap.index)
-  else {
+  else if (!ex) {
     const m = s.match(/^(.*?)(?:\s+|[-–—_]+)\d+(?:[.,]\d+)?(?:\s*[-–—:|].*)?$/)
     if (m) s = m[1]
     else if (/^\s*\d/.test(s)) s = ''
@@ -261,19 +278,24 @@ function guessWork(ancestors, name) {
 
 /* ---------- Números y tomos por obra ---------- */
 
-function workChapters(workId) {
-  return (workId != null && state.chaptersByWork.get(workId)) || []
+/** Capítulos (o, con extra, los extras) que ya tiene la obra en Capibara. */
+function workChapters(workId, extra = false) {
+  const all = (workId != null && state.chaptersByWork.get(workId)) || []
+  return extra ? extrasOnly(all) : regularOnly(all)
 }
 
 function workLatest(workId) {
   return workChapters(workId).reduce((best, c) => (!best || c.number > best.number ? c : best), null)
 }
 
-/** Asigna números libres dentro de una obra (sin chocar con lo publicado ni con la lista). */
-function makeNumberAllocator(workId, exclude = null) {
+/**
+ * Asigna números libres dentro de una obra (sin chocar con lo publicado ni con la lista), en la
+ * numeración de los capítulos o en la de los extras.
+ */
+function makeNumberAllocator(workId, exclude = null, extra = false, { includeAuto = false } = {}) {
   const taken = new Set([
-    ...workChapters(workId).map((c) => Number(c.number)),
-    ...batch.items.filter((i) => i.workId === workId && i !== exclude && !i.numberAuto).map((i) => i.number),
+    ...workChapters(workId, extra).map(shownNumber),
+    ...batch.items.filter((i) => i.workId === workId && i !== exclude && Boolean(i.extra) === extra && (includeAuto || !i.numberAuto)).map((i) => i.number),
   ].filter((n) => n != null && !Number.isNaN(n)))
   let n = Math.floor(Math.max(0, ...taken)) + 1
   return () => {
@@ -288,19 +310,42 @@ function allocateAutoNumbers(items) {
   const byWork = new Map()
   for (const it of items) {
     if (!it.numberAuto || it.status === 'done') continue
-    if (!byWork.has(it.workId)) byWork.set(it.workId, makeNumberAllocator(it.workId))
-    it.number = byWork.get(it.workId)()
+    const k = `${it.workId}:${it.extra ? 'e' : 'c'}`
+    if (!byWork.has(k)) byWork.set(k, makeNumberAllocator(it.workId, null, Boolean(it.extra)))
+    it.number = byWork.get(k)()
   }
 }
 
 /**
+ * Marca o desmarca un capítulo de la lista como extra. Si la carpeta ya decía qué era («Extra 2»),
+ * recupera ese número; si no, le da el siguiente libre de la otra numeración.
+ */
+async function setItemExtra(it, extra) {
+  if (Boolean(it.extra) === extra) return
+  it.extra = extra
+  it.keptPublished = null
+  if (it.parsedNumber != null && Boolean(it.parsedExtra) === extra) {
+    it.number = it.parsedNumber
+    it.numberSource = 'folder'
+  } else {
+    it.number = makeNumberAllocator(it.workId, it, extra, { includeAuto: true })()
+    it.numberSource = 'auto'
+  }
+  it.numberAuto = false
+  renderBatch()
+  batchValidate()
+  await offerSkipPublished([it])
+}
+
+/**
  * Renumera en orden los capítulos pendientes de cada grupo, empezando en startFor(grupo).
+ * Los extras no se tocan: llevan su propia numeración.
  * Si alguno trae el número en el nombre de su carpeta, pregunta antes de cambiárselo.
  * Devuelve { count, all } o null si se canceló.
  */
 async function renumberGroups(groups, startFor) {
   const targets = groups
-    .map((g) => ({ g, items: g.items.filter((i) => i.status !== 'done') }))
+    .map((g) => ({ g, items: g.items.filter((i) => i.status !== 'done' && !i.extra) }))
     .filter((x) => x.items.length)
   const named = targets.flatMap((x) => x.items.filter((i) => i.parsedNumber != null))
   const free = targets.flatMap((x) => x.items.filter((i) => i.parsedNumber == null))
@@ -417,6 +462,8 @@ async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
       number: p.number,
       numberAuto: p.number == null,
       parsedNumber: p.number,
+      extra: p.extra,
+      parsedExtra: p.extra,
       numberSource: p.number == null ? 'auto' : 'folder',
       keptPublished: null,
       volume,
@@ -436,6 +483,7 @@ async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
   batch.items.push(...items)
   allocateAutoNumbers(items)
   const guessedNumbers = items.filter((i) => i.numberAuto).length
+  const extras = items.filter((i) => i.extra).length
   const works = new Set(items.map((i) => i.workId))
   const unassigned = items.filter((i) => i.workId == null).length
 
@@ -445,6 +493,7 @@ async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
       works.size > 1 || (works.size === 1 && !works.has(state.selectedWork?.id)) ? `Repartidos en ${plural(works.size, 'obra', 'obras')}.` : '',
       guesses.size ? `Revisa las obras detectadas: ${[...guesses].map(([f, t]) => `«${f}» → ${t}`).join(' · ')}.` : '',
       guessedNumbers ? `${plural(guessedNumbers, 'carpeta', 'carpetas')} sin número: se les asignó el siguiente libre.` : '',
+      extras ? `${plural(extras, 'se marcó como extra', 'se marcaron como extras')} por el nombre de la carpeta.` : '',
       unassigned ? `${plural(unassigned, 'capítulo', 'capítulos')} sin obra: elígela en su grupo.` : '',
     ].filter(Boolean).join(' ')
     toast(guesses.size || unassigned ? 'warn' : 'success', `${plural(items.length, 'capítulo agregado', 'capítulos agregados')}`, msg || null, guesses.size ? 10000 : 7000)
@@ -471,18 +520,32 @@ function findPublished(items, { includeKept = false } = {}) {
   const found = []
   for (const it of items) {
     if (!batch.items.includes(it) || it.status === 'done' || it.workId == null || it.number == null) continue
-    if (!includeKept && it.keptPublished === `${it.workId}:${it.number}`) continue // ya se preguntó y se decidió dejarlo
-    const remote = workChapters(it.workId).find((c) => Number(c.number) === it.number)
+    if (!includeKept && it.keptPublished === itemSlot(it)) continue // ya se preguntó y se decidió dejarlo
+    const remote = workChapters(it.workId, Boolean(it.extra)).find((c) => shownNumber(c) === it.number)
     if (remote) found.push({ it, remote })
   }
   return found
+}
+
+/** «12:c5» o «12:e2»: obra, tipo (capítulo o extra) y número. */
+const itemSlot = (it) => `${it.workId}:${it.extra ? 'e' : 'c'}${it.number}`
+const itemLabel = (it) => chapterLabel(it.number, it.extra)
+
+/** «caps 1–3, 5 · extras 1–2» */
+function slotRanges(items) {
+  const caps = items.filter((i) => !i.extra).map((i) => i.number)
+  const extras = items.filter((i) => i.extra).map((i) => i.number)
+  return [
+    caps.length ? `${caps.length === 1 ? 'cap' : 'caps'} ${numberRanges(caps)}` : '',
+    extras.length ? `${extras.length === 1 ? 'extra' : 'extras'} ${numberRanges(extras)}` : '',
+  ].filter(Boolean).join(' · ')
 }
 
 /** Saca de la cola los ya publicados y los deja en «Capítulos subidos» como «Ya estaba publicado». */
 function skipPublished(found) {
   const ids = new Set(found.map((f) => f.it.id))
   // Del más viejo al más nuevo, para que la lista de subidos quede en orden de capítulo.
-  for (const f of [...found].sort((a, b) => a.it.number - b.it.number)) pushUploaded(uploadedEntry(f.it, f.remote, 'existing'))
+  for (const f of [...found].sort((a, b) => Number(Boolean(a.it.extra)) - Number(Boolean(b.it.extra)) || a.it.number - b.it.number)) pushUploaded(uploadedEntry(f.it, f.remote, 'existing'))
   saveUploaded()
   batch.items = batch.items.filter((i) => !ids.has(i.id))
   toast('success', plural(found.length, 'capítulo omitido', 'capítulos omitidos'), 'Quedaron en «Capítulos subidos» como «Ya estaba publicado».')
@@ -501,8 +564,8 @@ async function offerSkipPublished(items) {
   const samePages = found.filter((f) => f.remote.pages == null || f.remote.pages === f.it.files.length).length
   const differ = found.filter((f) => f.remote.pages != null && f.remote.pages !== f.it.files.length)
   const list = [...byWork].map(([workId, fs]) =>
-    `«${workById(workId)?.title || 'Obra'}»: ${fs.length === 1 ? 'cap' : 'caps'} ${numberRanges(fs.map((f) => f.it.number))}`)
-  differ.slice(0, 5).forEach((f) => list.push(`Cap ${f.it.number}: ${f.it.files.length} páginas aquí y ${f.remote.pages} en Capibara`))
+    `«${workById(workId)?.title || 'Obra'}»: ${slotRanges(fs.map((f) => f.it))}`)
+  differ.slice(0, 5).forEach((f) => list.push(`${itemLabel(f.it)}: ${f.it.files.length} páginas aquí y ${f.remote.pages} en Capibara`))
   const total = batch.items.filter((i) => i.status !== 'done').length
 
   const choice = await ask({
@@ -524,7 +587,7 @@ async function offerSkipPublished(items) {
   if (choice === 'skip') {
     skipPublished(found)
   } else {
-    for (const f of found) f.it.keptPublished = `${f.it.workId}:${f.it.number}`
+    for (const f of found) f.it.keptPublished = itemSlot(f.it)
   }
   renderBatch()
   renderUploaded()
@@ -624,7 +687,7 @@ function saveUploaded() {
  * Un «Ya estaba publicado» no reemplaza al registro de cuando lo subió el programa.
  */
 function pushUploaded(entry) {
-  const same = (e) => e.workId === entry.workId && e.number === entry.number
+  const same = (e) => e.workId === entry.workId && e.number === entry.number && Boolean(e.extra) === Boolean(entry.extra)
   if (entry.kind === 'existing' && batch.uploaded.some((e) => same(e) && e.kind === 'uploaded')) return
   batch.uploaded = batch.uploaded.filter((e) => !same(e))
   batch.uploaded.unshift(entry)
@@ -642,7 +705,8 @@ function uploadedEntry(it, data, kind) {
     chapterId: data.id ?? null,
     workId: it.workId,
     workTitle: workById(it.workId)?.title || '',
-    number: existing ? Number(data.number) : it.number,
+    number: existing ? shownNumber(data) : it.number,
+    extra: existing ? isExtra(data) : Boolean(it.extra),
     volume: existing ? data.volumeNumber ?? null : it.volume ?? null,
     title: (existing ? data.title : it.title) || '',
     folder: it.name,
@@ -670,7 +734,7 @@ function uploadedRow(e) {
     el('div', { class: 'up-cover' }, e.thumb ? el('img', { src: e.thumb, alt: '', loading: 'lazy', decoding: 'async', onerror: (ev) => ev.target.remove() }) : null),
     el('div', { class: 'up-body' },
       el('div', { class: 'up-title' },
-        el('b', { text: `Cap ${e.number}` }),
+        el('b', { text: chapterLabel(e.number, e.extra) }),
         e.volume != null ? el('span', { class: 'up-vol', text: `· Vol ${e.volume}` }) : null,
         e.title ? el('span', { class: 'up-name', text: `— ${e.title}` }) : null,
         el('span', { class: 'up-work', text: e.workTitle })),
@@ -740,7 +804,7 @@ const ICON_MORE = '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circl
 async function uploadedChapterId(e) {
   if (e.chapterId) return e.chapterId
   const list = await ensureChapters(e.workId)
-  const found = list?.find((c) => Number(c.number) === Number(e.number))
+  const found = list?.find((c) => isExtra(c) === Boolean(e.extra) && shownNumber(c) === Number(e.number))
   if (found) e.chapterId = found.id
   return found?.id || null
 }
@@ -756,7 +820,7 @@ function afterUploadedChange(e) {
 async function uploadedActions(e) {
   if (state.uploading) return toast('info', 'Espera a que termine la subida', 'Después podrás arreglar este capítulo.')
   if (!canWrite(state.me?.key)) return toast('warn', 'No se puede cambiar', 'Esta API key no tiene el permiso chapters:write.')
-  const name = `Cap ${e.number} de «${e.workTitle || 'la obra'}»`
+  const name = `${chapterLabel(e.number, e.extra)} de «${e.workTitle || 'la obra'}»`
 
   if (e.kind === 'trashed') {
     const choice = await ask({
@@ -801,8 +865,8 @@ async function uploadedActions(e) {
 async function renumberUploaded(e, id) {
   const r = await ask({
     kind: 'info',
-    title: `Cambiar el número del cap ${e.number}`,
-    text: `«${e.workTitle}». Si el número nuevo ya existe en la obra, Capibara no deja cambiarlo.`,
+    title: `Cambiar el número ${e.extra ? 'del extra' : 'del cap'} ${e.number}`,
+    text: `«${e.workTitle}». Si ${e.extra ? 'ese extra' : 'ese número'} ya existe en la obra, Capibara no deja cambiarlo.`,
     input: { label: 'Número nuevo', value: String(e.number), type: 'number' },
     buttons: [{ value: 'no', label: 'Cancelar', cancel: true }, { value: 'yes', label: 'Cambiar', kind: 'primary' }],
   })
@@ -811,20 +875,20 @@ async function renumberUploaded(e, id) {
   if (r.input === '' || !Number.isFinite(n) || n < 0) return toast('warn', 'Número no válido', 'Escribe un número, por ejemplo 12 o 12.5.')
   if (n === Number(e.number)) return
   const res = await window.capi.chapter.setNumber(id, n)
-  if (!res.ok) return handleApiError(res.error, `No se pudo cambiar el cap ${e.number}`)
+  if (!res.ok) return handleApiError(res.error, `No se pudo cambiar ${e.extra ? 'el extra' : 'el cap'} ${e.number}`)
   const old = e.number
   // Otra entrada de la lista con ese número en la obra era de un capítulo que ya no lo tiene.
-  batch.uploaded = batch.uploaded.filter((x) => x === e || !(x.workId === e.workId && Number(x.number) === n && x.kind !== 'trashed'))
+  batch.uploaded = batch.uploaded.filter((x) => x === e || !(x.workId === e.workId && Boolean(x.extra) === Boolean(e.extra) && Number(x.number) === n && x.kind !== 'trashed'))
   e.number = n
   if (res.data?.url) e.url = res.data.url
-  toast('success', `Cap ${old} → cap ${n}`, `«${e.workTitle}»`)
+  toast('success', `${chapterLabel(old, e.extra)} → ${chapterLabel(n, e.extra).toLowerCase()}`, `«${e.workTitle}»`)
   afterUploadedChange(e)
 }
 
 async function publishUploaded(e, id) {
   const choice = await ask({
     kind: 'info',
-    title: `¿Publicar ya el cap ${e.number}?`,
+    title: `¿Publicar ya ${e.extra ? 'el extra' : 'el cap'} ${e.number}?`,
     text: `«${e.workTitle}» estaba programado${e.publishAt ? ` para el ${formatDate(new Date(e.publishAt))}` : ''}.`,
     buttons: [
       { value: 'no', label: 'Cancelar', cancel: true },
@@ -834,27 +898,27 @@ async function publishUploaded(e, id) {
   })
   if (choice !== 'quiet' && choice !== 'notify') return
   const res = await window.capi.chapter.publish(id, { notify: choice === 'notify' })
-  if (!res.ok) return handleApiError(res.error, `No se pudo publicar el cap ${e.number}`)
+  if (!res.ok) return handleApiError(res.error, `No se pudo publicar ${chapterLabel(e.number, e.extra).toLowerCase()}`)
   e.state = 'published'
   e.publishAt = null
-  toast('success', `Cap ${e.number} publicado`, choice === 'notify' ? 'Salieron los avisos de siempre.' : 'Sin avisos.')
+  toast('success', `${chapterLabel(e.number, e.extra)} publicado`, choice === 'notify' ? 'Salieron los avisos de siempre.' : 'Sin avisos.')
   afterUploadedChange(e)
 }
 
 async function trashUploaded(e, id) {
   const choice = await ask({
     kind: 'warn',
-    title: `¿Mandar el cap ${e.number} a la papelera?`,
+    title: `¿Mandar ${e.extra ? 'el extra' : 'el cap'} ${e.number} a la papelera?`,
     text: `«${e.workTitle}». Deja de verse en Capibara y su número queda libre. Se puede restaurar durante 30 días, aquí o desde el panel.`,
     buttons: [{ value: 'no', label: 'Cancelar', cancel: true, focus: true }, { value: 'yes', label: 'Mandar a la papelera', kind: 'danger-solid' }],
   })
   if (choice !== 'yes') return
   const res = await window.capi.chapter.trash(id)
-  if (!res.ok) return handleApiError(res.error, `No se pudo borrar el cap ${e.number}`)
+  if (!res.ok) return handleApiError(res.error, `No se pudo borrar ${chapterLabel(e.number, e.extra).toLowerCase()}`)
   e.trashedFrom = e.kind
   e.kind = 'trashed'
   e.trashedAt = new Date().toISOString()
-  toast('success', `Cap ${e.number} en la papelera`, 'Puedes restaurarlo o volver a poner su carpeta en la cola desde esta lista.')
+  toast('success', `${chapterLabel(e.number, e.extra)} en la papelera`, 'Puedes restaurarlo o volver a poner su carpeta en la cola desde esta lista.')
   afterUploadedChange(e)
 }
 
@@ -862,11 +926,11 @@ async function restoreUploaded(e) {
   const id = e.chapterId
   if (!id) return toast('error', 'No se puede restaurar desde aquí', 'Restáuralo desde la papelera del panel.')
   const res = await window.capi.chapter.restore(id)
-  if (!res.ok) return handleApiError(res.error, `No se pudo restaurar el cap ${e.number}`)
+  if (!res.ok) return handleApiError(res.error, `No se pudo restaurar ${chapterLabel(e.number, e.extra).toLowerCase()}`)
   e.kind = e.trashedFrom || 'uploaded'
   delete e.trashedFrom
   delete e.trashedAt
-  toast('success', `Cap ${e.number} restaurado`, `«${e.workTitle}»`)
+  toast('success', `${chapterLabel(e.number, e.extra)} restaurado`, `«${e.workTitle}»`)
   afterUploadedChange(e)
 }
 
@@ -966,11 +1030,12 @@ function batchValidate() {
 
   // Números repetidos o existentes, dentro de cada obra
   const counts = new Map()
-  queue.forEach((i) => { if (i.number != null && i.workId != null) { const k = `${i.workId}:${i.number}`; counts.set(k, (counts.get(k) || 0) + 1) } })
+  queue.forEach((i) => { if (i.number != null && i.workId != null) { const k = itemSlot(i); counts.set(k, (counts.get(k) || 0) + 1) } })
   const existing = new Map()
-  const existingFor = (workId) => {
-    if (!existing.has(workId)) existing.set(workId, new Set(workChapters(workId).map((c) => Number(c.number))))
-    return existing.get(workId)
+  const existingFor = (workId, extra) => {
+    const k = `${workId}:${extra}`
+    if (!existing.has(k)) existing.set(k, new Set(workChapters(workId, extra).map(shownNumber)))
+    return existing.get(k)
   }
 
   let bad = 0
@@ -981,10 +1046,11 @@ function batchValidate() {
       const s = plan.map.get(it.id) || {}
       const work = workById(it.workId)
       if (!work) err = state.works.length ? 'Elige la obra de este capítulo.' : 'Cargando las obras del scan…'
-      else if (it.number == null || Number.isNaN(it.number)) err = 'Falta el número del capítulo.'
+      else if (it.number == null || Number.isNaN(it.number)) err = it.extra ? 'Falta el número del extra.' : 'Falta el número del capítulo.'
       else if (it.number < 0) err = 'El número no puede ser negativo.'
-      else if (existingFor(it.workId).has(it.number)) { err = `El capítulo ${it.number} ya existe en «${work.title}».`; always = true }
-      else if (counts.get(`${it.workId}:${it.number}`) > 1) { err = `El número ${it.number} está repetido en «${work.title}».`; always = true }
+      else if (it.number >= EXTRA_BASE) { err = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`; always = true }
+      else if (existingFor(it.workId, Boolean(it.extra)).has(it.number)) { err = `${it.extra ? 'El extra' : 'El capítulo'} ${it.number} ya existe en «${work.title}».`; always = true }
+      else if (counts.get(itemSlot(it)) > 1) { err = `${it.extra ? 'El extra' : 'El número'} ${it.number} está repetido en «${work.title}».`; always = true }
       else if (it.volume != null && (!Number.isInteger(it.volume) || it.volume < 0)) { err = 'El tomo debe ser un número entero.'; always = true }
       else if (it.files.length > MAX_PAGES) { err = `Tiene ${it.files.length} páginas (máximo ${MAX_PAGES}).`; always = true }
       else if (it.files.some((f) => f.size > MAX_BYTES)) { err = 'Tiene imágenes de más de 40 MB.'; always = true }
@@ -1074,8 +1140,11 @@ function renderBatchSummary(plan, errors) {
 /** Aviso bajo la fila cuando el número no es el que trae el nombre de la carpeta. */
 function numberNote(it) {
   if (it.status === 'done' || it.number == null || Number.isNaN(it.number)) return null
-  if (it.parsedNumber != null && it.number !== it.parsedNumber) {
-    return { cls: 'warn', text: `La carpeta dice cap ${it.parsedNumber} → se subirá como cap ${it.number}` }
+  if (it.parsedNumber != null && (it.number !== it.parsedNumber || Boolean(it.parsedExtra) !== Boolean(it.extra))) {
+    return { cls: 'warn', text: `La carpeta dice ${chapterLabel(it.parsedNumber, it.parsedExtra).toLowerCase()} → se subirá como ${itemLabel(it).toLowerCase()}` }
+  }
+  if (it.extra && it.parsedExtra && it.parsedNumber == null && it.numberSource === 'auto') {
+    return { cls: 'info', text: 'Extra sin número en el nombre: se le asignó el siguiente libre' }
   }
   if (it.parsedNumber == null && it.numberSource === 'auto') {
     return { cls: 'info', text: 'La carpeta no trae número: se le asignó el siguiente libre' }
@@ -1109,7 +1178,7 @@ function chapterRow(it) {
   const tooBig = it.files.filter((f) => f.size > MAX_BYTES).length
 
   const num = el('input', {
-    type: 'number', step: 'any', min: '0', placeholder: '—', value: it.number ?? '', disabled: locked, title: 'Número de capítulo',
+    type: 'number', step: 'any', min: '0', placeholder: '—', value: it.number ?? '', disabled: locked, title: it.extra ? 'Número del extra' : 'Número de capítulo',
     oninput: (e) => { it.number = e.target.value === '' ? null : Number(e.target.value); it.numberAuto = false; it.numberSource = 'manual'; batchValidate() },
   })
   const vol = el('input', {
@@ -1129,15 +1198,25 @@ function chapterRow(it) {
   })
   const progress = el('div')
   const handle = el('div', { class: 'ch-handle', html: ICON_GRIP, title: 'Arrastra para reordenar dentro de la obra' })
+  // Capítulo normal o extra («Extra N»: arte, ilustración, contenido fuera de capítulos).
+  const kindBtn = (extra, label, hint) => el('button', {
+    type: 'button', class: Boolean(it.extra) === extra ? 'on' : '', disabled: locked, title: hint,
+    'aria-pressed': String(Boolean(it.extra) === extra), onclick: () => setItemExtra(it, extra),
+  }, label)
+  const kind = el('div', { class: `ch-kind${it.extra ? ' extra' : ''}`, role: 'group', 'aria-label': 'Tipo' },
+    kindBtn(false, 'Capítulo', 'Capítulo normal: lleva el número de capítulo de la obra.'),
+    kindBtn(true, 'Extra', 'Extra: arte, ilustración o contenido fuera de capítulos. Se muestra como «Extra N» y no cuenta como capítulo.'))
 
   const row = el('li', { class: 'chrow', dataset: { id: it.id, status: it.status } },
     handle,
-    el('div', { class: 'ch-cover', title: 'Ver páginas', onclick: () => openPagesModal(it) },
+    el('div', { class: 'ch-cover', title: 'Ver y ordenar las páginas de este capítulo', onclick: () => openPagesModal(it) },
       it.files[0] ? el('img', { src: it.files[0].url, alt: '', loading: 'lazy', decoding: 'async' }) : null,
-      el('span', { class: 'thumb-num', text: String(it.files.length) })),
+      el('span', { class: 'thumb-num', text: String(it.files.length) }),
+      el('span', { class: 'ch-cover-hint', html: `${ICON_PAGES}<span>Ver páginas</span>` })),
     el('div', { class: 'ch-body' },
       el('div', { class: 'ch-fields' },
-        el('label', { class: 'ch-field' }, el('span', { class: 'pre', text: 'Cap' }), num),
+        kind,
+        el('label', { class: `ch-field${it.extra ? ' extra' : ''}` }, el('span', { class: 'pre', text: it.extra ? 'Extra' : 'Cap' }), num),
         el('label', { class: 'ch-field' }, el('span', { class: 'pre', text: 'Vol' }), vol),
         title),
       el('div', { class: 'ch-meta' },
@@ -1152,10 +1231,18 @@ function chapterRow(it) {
       note,
       error),
     el('div', { class: 'ch-side' },
-      status,
-      el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Mover a otra obra', html: ICON_BOOK, disabled: locked, onclick: (e) => openWorkPicker(e.currentTarget, [it]) }),
-      el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Ver y ordenar páginas', html: ICON_PAGES, onclick: () => openPagesModal(it) }),
-      el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Quitar de la lista', html: ICONS.x, disabled: state.uploading, onclick: () => removeChapter(it.id) })),
+      el('div', { class: 'ch-side-top' },
+        status,
+        el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Quitar este capítulo de la lista (no borra nada de tu carpeta ni de Capibara)', html: ICONS.x, disabled: state.uploading, onclick: () => removeChapter(it.id) })),
+      el('div', { class: 'ch-actions' },
+        el('button', {
+          type: 'button', class: 'btn secondary small', disabled: locked, onclick: (e) => openWorkPicker(e.currentTarget, [it]),
+          title: `Subir solo este capítulo a otra obra del scan (ahora: «${workById(it.workId)?.title || 'sin obra'}»)`,
+        }, el('span', { html: ICON_BOOK }), 'Cambiar obra'),
+        el('button', {
+          type: 'button', class: 'btn secondary small', onclick: () => openPagesModal(it),
+          title: 'Ver las páginas en orden, reordenarlas, quitar alguna y marcar páginas simples o la destacada',
+        }, el('span', { html: ICON_PAGES }), 'Ver páginas'))),
     el('div', { class: 'ch-progress' }, progress),
   )
 
@@ -1171,12 +1258,14 @@ function chapterRow(it) {
 function groupHeader(g) {
   const work = workById(g.workId)
   const pending = g.items.filter((i) => i.status !== 'done')
-  const nums = g.items.map((i) => i.number).filter((n) => n != null && !Number.isNaN(n))
+  const nums = g.items.filter((i) => !i.extra).map((i) => i.number).filter((n) => n != null && !Number.isNaN(n))
+  const extras = g.items.filter((i) => i.extra).length
   const last = workLatest(g.workId)
   const guessed = g.items.some((i) => i.workGuess)
   const meta = [
     plural(g.items.length, 'capítulo', 'capítulos'),
     nums.length ? (nums.length > 1 ? `#${Math.min(...nums)}–${Math.max(...nums)}` : `#${nums[0]}`) : null,
+    extras ? plural(extras, 'extra', 'extras') : null,
     work ? (last ? `último publicado #${last.number}` : 'sin capítulos publicados') : null,
   ].filter(Boolean).join(' · ')
 
@@ -1188,8 +1277,8 @@ function groupHeader(g) {
         guessed && work ? el('span', { class: 'badge warning', title: 'Asignada por el nombre de la carpeta. Cámbiala si no es correcta.', text: 'Detectada por carpeta' }) : null),
       el('div', { class: 'group-meta', text: meta })),
     el('div', { class: 'group-actions' },
-      work && pending.length ? el('button', {
-        type: 'button', class: 'btn ghost small', title: 'Numerar en orden desde el siguiente al último publicado', disabled: state.uploading,
+      work && pending.some((i) => !i.extra) ? el('button', {
+        type: 'button', class: 'btn ghost small', title: 'Numerar en orden desde el siguiente al último publicado (los extras no se tocan)', disabled: state.uploading,
         onclick: async () => {
           const start = last ? Math.floor(last.number) + 1 : 1
           const res = await renumberGroups([g], () => start)
@@ -1201,8 +1290,9 @@ function groupHeader(g) {
       }, 'Numerar desde el último') : null,
       el('button', {
         type: 'button', class: `btn ${work ? 'secondary' : 'primary'} small`, disabled: state.uploading || !pending.length,
+        title: work ? `Pasar los ${plural(g.items.length, 'capítulo', 'capítulos')} de este grupo a otra obra` : 'Elegir la obra de estos capítulos',
         onclick: (e) => openWorkPicker(e.currentTarget, g.items),
-      }, el('span', { html: ICON_BOOK }), work ? 'Cambiar obra' : 'Elegir obra')))
+      }, el('span', { html: ICON_BOOK }), work ? (g.items.length > 1 ? 'Cambiar obra de todos' : 'Cambiar obra') : 'Elegir obra')))
 }
 
 function renderBatch() {
@@ -1543,7 +1633,7 @@ async function batchStart() {
   let bytesBefore = 0
   let current = null
   let pos = 0
-  const label = () => `${pos + 1}/${queue.length} · ${workById(current.workId)?.title || ''} #${current.number}`
+  const label = () => `${pos + 1}/${queue.length} · ${workById(current.workId)?.title || ''} ${current.extra ? `Extra ${current.number}` : `#${current.number}`}`
 
   const unsubscribe = window.capi.upload.onProgress((p) => {
     if (!current) return
@@ -1585,6 +1675,7 @@ async function batchStart() {
         publishAt: sched.publishAt ? sched.publishAt.toISOString() : null,
         notify: plan.notify,
         announcePage: announcePageFor(it.files),
+        extra: Boolean(it.extra),
       },
     })
     bytesBefore += sumSize(it.files)
@@ -1597,9 +1688,9 @@ async function batchStart() {
       it.progress = 1
       ok++
       tally.ok++
-      warnSingles(res.data.singleCheck, it.number)
+      warnSingles(res.data.singleCheck, itemLabel(it))
       const cache = state.chaptersByWork.get(it.workId)
-      const entry = { id: res.data.id, number: it.number, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url }
+      const entry = { id: res.data.id, number: res.data.number ?? it.number, extra: Boolean(it.extra), extraNumber: it.extra ? it.number : null, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url }
       if (cache) cache.push(entry)
       if (state.selectedWork?.id === it.workId && state.chapters !== cache) state.chapters.push(entry)
       // Sale de la cola y pasa a «Capítulos subidos».
@@ -1673,13 +1764,13 @@ async function waitRateLimit(error) {
  * asignado solo porque la carpeta no lo trae, se muestra el resumen y se pide confirmación.
  */
 async function confirmNumbering(queue) {
-  const odd = queue.filter((i) => i.parsedNumber != null && i.number !== i.parsedNumber)
+  const odd = queue.filter((i) => i.parsedNumber != null && (i.number !== i.parsedNumber || Boolean(i.parsedExtra) !== Boolean(i.extra)))
   const auto = queue.filter((i) => i.parsedNumber == null && i.numberSource === 'auto')
   if (!odd.length && !auto.length) return true
   const MAX = 8
   const lines = [
-    ...odd.map((i) => `«${i.name}» → cap ${i.number} (la carpeta dice ${i.parsedNumber})`),
-    ...auto.map((i) => `«${i.name}» → cap ${i.number} (la carpeta no trae número)`),
+    ...odd.map((i) => `«${i.name}» → ${itemLabel(i).toLowerCase()} (la carpeta dice ${chapterLabel(i.parsedNumber, i.parsedExtra).toLowerCase()})`),
+    ...auto.map((i) => `«${i.name}» → ${itemLabel(i).toLowerCase()} (la carpeta no trae número)`),
   ]
   const choice = await ask({
     kind: 'warn',

@@ -89,11 +89,15 @@ function safeName(s, fallback = 'Sin título') {
   return clean
 }
 
-/** «Vol 3 Cap 12 - Título»: el mismo formato que reconoce «Varios capítulos». */
-function chapterFolderName({ number, volumeNumber, title }) {
+/**
+ * «Vol 3 Cap 12 - Título» o «Extra 2 - Título»: el mismo formato que reconoce «Varios capítulos».
+ * extraNumber: el N de un extra (la API lo guarda con number = 100000 + N).
+ */
+function chapterFolderName({ number, volumeNumber, title, extra = false, extraNumber = null }) {
   const vol = volumeNumber != null ? `Vol ${volumeNumber} ` : ''
   const t = title ? ` - ${title}` : ''
-  return safeName(`${vol}Cap ${number}${t}`, `Cap ${number}`)
+  const label = extra ? `Extra ${extraNumber ?? number}` : `Cap ${number}`
+  return safeName(`${vol}${label}${t}`, label)
 }
 
 /** Guarda las páginas como 001.jpg, 002.webp… en `dir`, escribiendo primero a un temporal. */

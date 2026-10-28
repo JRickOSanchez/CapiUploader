@@ -612,6 +612,22 @@ function selectWork(work, { refreshChapters = true } = {}) {
   if (changed && typeof batchOnWorkSelected === 'function') batchOnWorkSelected(work)
 }
 
+/*
+ * Extras («Extra N»: arte, ilustraciones, contenido fuera de capítulos). Van numerados aparte de
+ * los capítulos: la API los guarda con number = 100000 + N y extraNumber = N, y al crearlos o
+ * editarlos con extra: true el number que se manda es N.
+ */
+const EXTRA_BASE = 100000
+const isExtra = (c) => Boolean(c?.extra) || Number(c?.number) >= EXTRA_BASE
+const extraNo = (c) => (c.extraNumber != null ? Number(c.extraNumber) : Number(c.number) - EXTRA_BASE)
+/** El número con el que se muestra y se compara: N para los extras, number para los capítulos. */
+const shownNumber = (c) => (isExtra(c) ? extraNo(c) : Number(c.number))
+const regularOnly = (list) => (list || []).filter((c) => !isExtra(c))
+const extrasOnly = (list) => (list || []).filter(isExtra)
+/** Números ya usados en una lista de capítulos, del tipo pedido (capítulos o extras). */
+const usedNumbers = (list, extra) => new Set((extra ? extrasOnly(list) : regularOnly(list)).map(shownNumber))
+const chapterLabel = (n, extra) => `${extra ? 'Extra' : 'Cap'} ${n}`
+
 const chaptersInflight = new Map()
 
 /** Capítulos de una obra, con caché. Devuelve null si falló la consulta. */
@@ -648,13 +664,20 @@ async function loadChapters() {
 }
 
 function latestChapter() {
-  return state.chapters.reduce((best, c) => (!best || c.number > best.number ? c : best), null)
+  return regularOnly(state.chapters).reduce((best, c) => (!best || c.number > best.number ? c : best), null)
+}
+
+function latestExtraNumber(list) {
+  const nums = extrasOnly(list).map(extraNo)
+  return nums.length ? Math.max(...nums) : 0
 }
 
 function applyChapterSuggestions() {
   const last = latestChapter()
   if (state.autoNumber) {
-    $('#chNumber').value = last ? String(Math.floor(last.number) + 1) : '1'
+    $('#chNumber').value = $('#extraToggle').checked
+      ? String(Math.floor(latestExtraNumber(state.chapters)) + 1)
+      : last ? String(Math.floor(last.number) + 1) : '1'
   }
   if (state.autoVolume) {
     $('#chVolume').value = last?.volumeNumber != null ? String(last.volumeNumber) : ''
@@ -673,11 +696,12 @@ function renderWorkInfo() {
   }
   const last = latestChapter()
   const scheduled = state.chapters.filter((c) => c.state === 'scheduled').length
+  const extras = extrasOnly(state.chapters).length
   box.append(
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Último cap.' }),
       el('div', { class: 'stat-value', text: last ? `#${last.number}${last.volumeNumber != null ? ` · Vol. ${last.volumeNumber}` : ''}` : '—' })),
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Capítulos' }),
-      el('div', { class: 'stat-value', text: formatNumber(state.chapters.length) })),
+      el('div', { class: 'stat-value', text: `${formatNumber(state.chapters.length - extras)}${extras ? ` · ${extras} extra${extras === 1 ? '' : 's'}` : ''}` })),
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Programados' }),
       el('div', { class: 'stat-value', text: scheduled ? formatNumber(scheduled) : 'Ninguno' })),
   )
@@ -1006,6 +1030,7 @@ function readForm() {
     publishAt: schedule && publishRaw ? new Date(publishRaw) : null,
     schedule,
     notify: $('#notifyToggle').checked,
+    extra: $('#extraToggle').checked,
   }
 }
 
@@ -1023,12 +1048,15 @@ function validate() {
 
   if (!state.selectedWork) errors.work = 'Selecciona una obra.'
 
-  // Número
-  const existing = new Set(state.chapters.map((c) => Number(c.number)))
-  if (form.number == null || Number.isNaN(form.number)) errors.number = 'Indica el número del capítulo.'
+  // Número (los extras llevan su propia numeración)
+  const existing = usedNumbers(state.chapters, form.extra)
+  $('#chNumberLabel').textContent = form.extra ? 'Número del extra' : 'Número de capítulo'
+  if (form.number == null || Number.isNaN(form.number)) errors.number = form.extra ? 'Indica el número del extra.' : 'Indica el número del capítulo.'
   else if (form.number < 0) errors.number = 'El número no puede ser negativo.'
-  else if (existing.has(form.number)) errors.number = `El capítulo ${form.number} ya existe en esta obra.`
+  else if (form.number >= EXTRA_BASE) errors.number = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`
+  else if (existing.has(form.number)) errors.number = `${form.extra ? 'El extra' : 'El capítulo'} ${form.number} ya existe en esta obra.`
   if (errors.number && (show || existing.has(form.number))) setHint('#chNumberHint', errors.number, 'error')
+  else if (form.number != null && state.autoNumber && form.extra) setHint('#chNumberHint', 'Sugerido: siguiente extra. Se muestra como «Extra N».', '')
   else if (form.number != null && state.autoNumber && state.chapters.length) setHint('#chNumberHint', 'Sugerido: siguiente al último publicado.', '')
   else setHint('#chNumberHint', '')
   $('#chNumber').classList.toggle('invalid', Boolean(errors.number) && (show || existing.has(form.number)))
@@ -1077,7 +1105,7 @@ function renderSummary(form, errors) {
   const w = state.selectedWork
   const parts = []
   if (w) parts.push(w.title)
-  if (form.number != null && !Number.isNaN(form.number)) parts.push(`Cap. ${form.number}`)
+  if (form.number != null && !Number.isNaN(form.number)) parts.push(form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
   if (form.volumeNumber != null) parts.push(`Vol. ${form.volumeNumber}`)
   if (state.files.length) parts.push(`${state.files.length} pág.`)
   const fl = featuredLabel(state.files)
@@ -1118,6 +1146,8 @@ function initForm() {
   })
 
   $('#chNumber').addEventListener('input', () => { state.autoNumber = false; validate() })
+  // Al marcar o desmarcar «extra», el número sugerido pasa a la otra numeración.
+  $('#extraToggle').addEventListener('change', () => { state.autoNumber = true; applyChapterSuggestions(); validate() })
   $('#chVolume').addEventListener('input', () => { state.autoVolume = false; validate() })
   $('#publishAt').addEventListener('input', () => { refreshMins(); validate() })
   ;['#chTitle', '#notifyToggle'].forEach((s) => $(s).addEventListener('input', validate))
@@ -1136,6 +1166,7 @@ function resetForm(full) {
     $('#scheduleToggle').checked = false
     $('#publishAt').value = ''
     $('#notifyToggle').checked = true
+    $('#extraToggle').checked = false
     $('#scheduleToggle').dispatchEvent(new Event('change'))
   }
   state.autoNumber = true
@@ -1204,7 +1235,7 @@ async function startUpload() {
   setUploadingUI(true)
   renderThumbs()
   setProgress(0, 'Preparando…')
-  $('#summaryMain').textContent = `Subiendo «${state.selectedWork.title}» · Cap. ${form.number}`
+  $('#summaryMain').textContent = `Subiendo «${state.selectedWork.title}» · ${form.extra ? 'Extra' : 'Cap.'} ${form.number}`
   $('#summarySub').className = 'summary-sub'
   $('#summarySub').textContent = `${state.files.length} páginas`
 
@@ -1230,6 +1261,7 @@ async function startUpload() {
       publishAt: form.publishAt ? form.publishAt.toISOString() : null,
       notify: form.notify,
       announcePage: announcePageFor(state.files),
+      extra: form.extra,
     },
   })
   unsubscribe()
@@ -1243,7 +1275,7 @@ async function startUpload() {
       toast('info', 'Subida cancelada', 'Las páginas ya subidas se reutilizarán si vuelves a intentarlo pronto.')
       return
     }
-    if (res.error.code === 'api.conflict' || res.error.code === 'api.chapter_exists') {
+    if (['api.conflict', 'api.chapter_exists', 'api.extra_exists'].includes(res.error.code)) {
       $('#chNumber').classList.add('invalid')
       setHint('#chNumberHint', res.error.message, 'error')
       $('#chNumber').focus()
@@ -1256,22 +1288,23 @@ async function startUpload() {
 
   state.lastResult = res.data
   showDone(res.data, form, work)
-  warnSingles(res.data.singleCheck, form.number)
-  state.chapters.push({ number: form.number, volumeNumber: form.volumeNumber, state: res.data.state })
+  warnSingles(res.data.singleCheck, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
+  state.chapters.push({ number: res.data.number ?? form.number, extra: form.extra, extraNumber: form.extra ? form.number : null, volumeNumber: form.volumeNumber, state: res.data.state })
   loadChapters()
 }
 
 /** Avisa si la comprobación posterior no encontró las páginas simples como se pidieron. */
-function warnSingles(check, number) {
+/** label: «Cap. 12», «Extra 2»… */
+function warnSingles(check, label) {
   if (!check || check.ok) return
-  toast('warn', `Cap. ${number}: revisa las páginas simples`, check.error
+  toast('warn', `${label}: revisa las páginas simples`, check.error
     ? `El capítulo se subió, pero no se pudieron comprobar: ${check.error}`
     : `Se pidieron ${check.expected} y quedaron ${check.marked}. Corrígelas desde el panel.`, 10000)
 }
 
 function showDone(chapter, form, work) {
   const states = { published: 'Publicado', scheduled: 'Programado', early_access: 'Anticipado' }
-  const lines = [`«${work.title}» · Capítulo ${chapter.number ?? form.number}${form.title ? ` — ${form.title}` : ''}`]
+  const lines = [`«${work.title}» · ${form.extra ? `Extra ${form.number}` : `Capítulo ${chapter.number ?? form.number}`}${form.title ? ` — ${form.title}` : ''}`]
   const singles = countSingles(state.files)
   const fl = featuredLabel(state.files)
   lines.push(`${state.files.length} páginas${singles ? ` (${singles} simple${singles === 1 ? '' : 's'})` : ''}${fl ? ` · destacada ${fl.replace('★ ', '')}` : ''} · ${states[chapter.state] || chapter.state || 'Creado'}`)

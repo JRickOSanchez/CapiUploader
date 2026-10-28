@@ -24,12 +24,20 @@ importación o descarga sigue en marcha aunque cambies de sección (la pestaña 
 ### Subir
 
 - **Un capítulo**: arrastra las páginas, marca páginas simples y la destacada, programa y sube.
+- **Extras** (arte, ilustraciones, contenido fuera de capítulos): se marcan con «Es un extra» en «Un
+  capítulo» o con el selector «Capítulo | Extra» de cada fila en «Varios capítulos». Se muestran como «Extra N» y
+  llevan su propia numeración, aparte de los capítulos (la API los guarda como 100000 + N). Las carpetas
+  que se llaman «Extra 2», «Especial», «Omake» o «Bonus» se marcan solas, salvo que el nombre traiga
+  antes un «Cap N» («Cap 12 - Un día especial» sigue siendo el cap 12). «Numerar desde el último» no
+  toca los extras, y «Descargar» los guarda como `Extra N - Título`.
 - **Varios capítulos**: una carpeta por capítulo, de una o varias obras del mismo scan.
   - La obra se detecta por el nombre de la carpeta que contiene los capítulos. Por ejemplo, elegir
     `Choujin X` con `Cap 1`, `Cap 2`… dentro los asigna a esa obra. También funciona con
     `Lote/Obra/Capítulo` (reparte por obra) y con `Obra/Vol 2/Capítulo`, que además pone el tomo 2.
     Se ignora lo que va entre corchetes o paréntesis («Choujin X [Scan]») y se compara también con
     el título alternativo. Si la carpeta no lo dice, se usa el nombre del capítulo («Choujin X Cap 12»).
+  - Cada fila tiene «Cambiar obra» (mueve solo ese capítulo) y «Ver páginas» (ordenar, quitar, marcar
+    simples o la destacada). «Cambiar obra de todos», en el encabezado, mueve el grupo entero.
   - La programación escalonada lleva una secuencia por obra.
   - Si agregas capítulos cuyo número ya está publicado en su obra (por ejemplo, al retomar una
     subida que dejaste a medias), pregunta si omitirlos. También compara la cantidad de páginas.

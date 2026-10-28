@@ -95,7 +95,7 @@ function dlRow(c) {
     onclick: (e) => dlToggle(c, e.shiftKey),
   },
   box,
-  el('span', { class: 'dl-num' }, `Cap ${c.number}`, c.volumeNumber != null ? el('small', { text: `Vol ${c.volumeNumber}` }) : null),
+  el('span', { class: 'dl-num' }, chapterLabel(shownNumber(c), isExtra(c)), c.volumeNumber != null ? el('small', { text: `Vol ${c.volumeNumber}` }) : null),
   el('span', { class: 'dl-title', text: c.title || '' }),
   el('span', { class: 'dl-meta', text: meta }),
   dlStatusPill(row) || el('span'),
@@ -213,7 +213,7 @@ async function dlStart() {
 
   const unsubscribe = window.capi.download.onProgress((p) => {
     const c = chosen.find((x) => x.id === p.chapterId)
-    const label = `${p.position + 1}/${p.count} · Cap ${c?.number ?? ''}`
+    const label = `${p.position + 1}/${p.count} · ${c ? chapterLabel(shownNumber(c), isExtra(c)) : ''}`
     const row = dl.rows.get(p.chapterId) || {}
     if (p.status === 'start' || p.status === 'page') Object.assign(row, { status: 'downloading', done: p.done, total: p.total })
     else if (p.status === 'done') Object.assign(row, { status: 'done', done: p.total, total: p.total })
@@ -229,7 +229,10 @@ async function dlStart() {
 
   const res = await window.capi.download.start({
     work: { id: work.id, title: work.title },
-    chapters: chosen.map((c) => ({ id: c.id, number: c.number, volumeNumber: c.volumeNumber ?? null, title: c.title || '', pages: c.pages ?? null })),
+    chapters: chosen.map((c) => ({
+      id: c.id, number: c.number, volumeNumber: c.volumeNumber ?? null, title: c.title || '', pages: c.pages ?? null,
+      extra: isExtra(c), extraNumber: isExtra(c) ? extraNo(c) : null,
+    })),
     dest: dl.dest,
     format: $('#dlFormat').value,
   })
@@ -255,7 +258,7 @@ async function dlStart() {
   const parts = [
     s.done ? `${plural(s.done, 'capítulo descargado', 'capítulos descargados')} (${formatNumber(s.pages)} pág.)` : null,
     s.skipped ? `${s.skipped} ya estaba${s.skipped === 1 ? '' : 'n'}` : null,
-    s.failed.length ? `${s.failed.length} con error: ${s.failed.slice(0, 3).map((f) => `Cap ${f.number}`).join(', ')}${s.failed.length > 3 ? '…' : ''}` : null,
+    s.failed.length ? `${s.failed.length} con error: ${s.failed.slice(0, 3).map((f) => { const c = chosen.find((x) => x.id === f.chapterId); return c ? chapterLabel(shownNumber(c), isExtra(c)) : `Cap ${f.number}` }).join(', ')}${s.failed.length > 3 ? '…' : ''}` : null,
   ].filter(Boolean)
   $('#dlSummaryMain').textContent = s.failed.length ? 'Descarga terminada con errores' : '¡Descarga terminada!'
   $('#dlSummarySub').className = `summary-sub${s.failed.length ? ' error' : ''}`

@@ -582,6 +582,8 @@ handle('chapter:upload', async (payload) => {
     if (chapter.announcePage !== undefined) body.announcePage = chapter.announcePage
     if (chapter.publishAt) body.publishAt = chapter.publishAt
     if (chapter.notify === false) body.notify = false
+    // Extra: number es el N de «Extra N» (numeración aparte de los capítulos).
+    if (chapter.extra === true) body.extra = true
     const created = await api.request(key, 'POST', `/works/${Number(workId)}/chapters`, body, signal)
 
     // Tras crearse, las claves ya pertenecen al capítulo: no deben reutilizarse.
@@ -664,6 +666,7 @@ handle('download:start', async ({ work, chapters, dest, format } = {}) => {
     const list = chapters.map((c) => ({
       id: Number(c.id), number: c.number, volumeNumber: c.volumeNumber ?? null, title: c.title || '',
       pages: Number.isInteger(c.pages) ? c.pages : null,
+      extra: c.extra === true, extraNumber: c.extra === true && Number.isFinite(Number(c.extraNumber)) ? Number(c.extraNumber) : null,
     })).filter((c) => Number.isInteger(c.id))
     const summary = await downloadChapters({
       key,
