@@ -1,0 +1,118 @@
+/* =========================================================
+   Capítulos subidos, preguntas y avisos de numeración
+   ========================================================= */
+.column-pages { gap: 14px; }
+
+/* Aviso bajo la fila cuando el número no es el de la carpeta */
+.ch-note { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.ch-note:empty { display: none; }
+.ch-note.warn { color: var(--warning); }
+
+/* Tarjeta «Capítulos subidos» */
+.uploaded-card { flex: none; max-height: 42%; display: flex; flex-direction: column; min-height: 0; }
+.uploaded-card .card-head { margin-bottom: 10px; }
+.uploaded-card.collapsed .card-head { margin-bottom: 0; }
+.uploaded-card.collapsed #uploadedToggle svg { transform: rotate(-90deg); }
+.step.done { background: var(--success-soft); color: var(--success); }
+.step.done svg { width: 14px; height: 14px; stroke-width: 2.6; }
+.uploaded-list {
+  list-style: none; margin: 0; padding: 8px; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+  border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2);
+}
+.uploaded-list > li { flex: none; }
+.uprow {
+  display: grid; grid-template-columns: 34px 1fr auto 30px; gap: 10px; align-items: center;
+  padding: 6px 8px 6px 6px; border-radius: 10px; background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--border));
+}
+.up-cover { width: 34px; height: 48px; border-radius: 6px; overflow: hidden; background: var(--surface-3); }
+.up-cover img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.up-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.up-title { display: flex; align-items: baseline; font-size: 13px; min-width: 0; white-space: nowrap; }
+.up-title > * { flex: none; }
+.up-title .up-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.up-title .up-work { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; margin-left: 10px; font-size: 11.5px; color: var(--text-3); }
+.up-status {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  background: var(--success-soft); color: var(--success);
+}
+.up-status.scheduled { background: var(--accent-soft); color: var(--accent-text); }
+.up-status.existing { background: var(--surface-3); color: var(--text-2); }
+
+/* Preguntas */
+.modal-card.ask-card { width: min(580px, 100%); }
+.modal-icon.warn { background: var(--warning-soft); color: var(--warning); }
+.ask-list {
+  list-style: none; margin: 0; padding: 10px 12px; max-height: 240px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px; font-size: 12.5px;
+  border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2);
+}
+.ask-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-list li.more { color: var(--text-3); }
+.up-title .up-vol, .up-title .up-name { margin-left: 5px; }
+/* La cola siempre conserva espacio aunque la lista de subidos sea larga. */
+.pages-card.batch-only { min-height: 300px; }
+.uploaded-card { max-height: 38%; }
+
+/* =========================================================
+   Arreglar capítulos subidos
+   ========================================================= */
+.uprow { grid-template-columns: 34px 1fr auto 30px 30px; }
+.uprow.trashed { border-color: var(--border); opacity: .72; }
+.uprow.trashed .up-title b { text-decoration: line-through; }
+.up-status.trashed { background: var(--danger-soft); color: var(--danger); }
+.ask-input { margin: 0; }
+
+/* Botón de actualización (barra superior) */
+.update-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft); color: var(--accent-text);
+  font: 700 12.5px var(--font); white-space: nowrap; -webkit-app-region: no-drag;
+}
+.update-chip:hover { border-color: var(--accent); }
+.update-chip svg { width: 15px; height: 15px; stroke-width: 2.4; }
+.update-chip.ready { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); box-shadow: 0 4px 14px rgba(18, 181, 217, .3); }
+
+/* Fila de «Varios capítulos»: tipo (Capítulo | Extra) y acciones con texto */
+/* En ventanas angostas el título baja a su propia línea en vez de montarse sobre los botones. */
+.chrow { grid-template-columns: 22px 52px minmax(0, 1fr) auto; }
+.ch-fields { display: flex; flex-wrap: wrap; gap: 8px; }
+.ch-fields > .ch-kind { flex: none; }
+.ch-fields > .ch-field { flex: none; width: 76px; }
+.ch-fields > .ch-field:nth-child(2) { width: 104px; }
+.ch-fields > input[type="text"] { flex: 1 1 160px; min-width: 0; }
+/* Cabecera del grupo: el nombre de la obra nunca desaparece; los botones bajan si no caben. */
+.group-text { min-width: 140px; }
+.group-title { flex-wrap: wrap; row-gap: 3px; }
+.group-title > span:first-child { min-width: 0; max-width: 100%; }
+.group-actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+.ch-field.extra .pre + input { padding-left: 52px; }
+.ch-kind {
+  display: inline-flex; height: 34px; padding: 3px; gap: 2px; border-radius: 9px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.ch-kind button {
+  border: 0; background: transparent; color: var(--text-3); cursor: pointer;
+  padding: 0 10px; border-radius: 6px; font: 700 12px var(--font); white-space: nowrap;
+}
+.ch-kind button:hover:not(:disabled):not(.on) { color: var(--text); }
+.ch-kind button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.ch-kind.extra button.on { background: var(--gold-soft); color: var(--gold); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent); }
+.ch-kind button:disabled { cursor: default; }
+.ch-side { flex-direction: column; align-items: stretch; gap: 6px; }
+.ch-side-top { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.ch-actions { display: flex; flex-direction: column; gap: 5px; }
+.ch-actions .btn { justify-content: flex-start; height: 28px; }
+.ch-actions .btn span { display: inline-flex; }
+/* La portada abre las páginas: se dice al pasar el ratón */
+.ch-cover-hint {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: rgba(0, 0, 0, .62); color: #fff; font-size: 10px; font-weight: 800; text-align: center; line-height: 1.1;
+  opacity: 0; transition: opacity .15s;
+}
+.ch-cover-hint svg { width: 16px; height: 16px; }
+.ch-cover:hover .ch-cover-hint { opacity: 1; }

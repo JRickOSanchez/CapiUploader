@@ -2,7 +2,7 @@
 
 /* =========================================================
    «Descargar»: baja capítulos de las obras del scan activo.
-   Usa el estado y las utilidades de app.js y batch.js.
+   Usa el estado y las utilidades globales de core.js.
    ========================================================= */
 const dl = {
   workId: null,
@@ -267,7 +267,7 @@ async function dlStart() {
     `${parts.join(' · ')}.${s.failed.length ? ' Pasa el ratón sobre la fila para ver el motivo y vuelve a descargar para reintentar.' : ''}`, 9000)
 }
 
-/* ---------- Ganchos con app.js ---------- */
+/* ---------- Eventos (se suscriben en el init) ---------- */
 
 async function dlOnShow() {
   renderDlWorks()
@@ -300,6 +300,9 @@ function dlOnWorksLoaded() {
 /* ---------- Inicio ---------- */
 
 function initDownload() {
+  on('scanChanged', dlOnScanChanged)
+  on('worksLoaded', dlOnWorksLoaded)
+  on('viewShown', (view) => { if (view === 'download') dlOnShow() })
   $('#dlWorkSearch').addEventListener('input', () => { dl.workIndex = 0; renderDlWorks() })
   $('#dlWorkSearch').addEventListener('keydown', (e) => {
     const works = dlFilteredWorks()
@@ -341,5 +344,3 @@ function initDownload() {
   $('#dlFormat').addEventListener('change', (e) => localStorage.setItem('dlFormat', e.target.value))
   renderDlDest()
 }
-
-initDownload()

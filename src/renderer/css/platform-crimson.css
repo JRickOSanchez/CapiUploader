@@ -1,0 +1,126 @@
+/* =========================================================
+   Tema Crimson Scan: vino casi negro, acento rosa intenso,
+   títulos serif en mayúsculas (Playfair Display), texto en
+   Poppins, tarjetas con borde morado y píldoras con contorno rosa.
+   ========================================================= */
+@font-face { font-family: "Playfair Display"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("../assets/fonts/playfair-display.woff2") format("woff2"); }
+@font-face { font-family: "Playfair Display"; font-style: italic; font-weight: 400 900; font-display: swap; src: url("../assets/fonts/playfair-display-italic.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-weight: 400; font-display: swap; src: url("../assets/fonts/poppins-400.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-weight: 500; font-display: swap; src: url("../assets/fonts/poppins-500.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-weight: 600; font-display: swap; src: url("../assets/fonts/poppins-600.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-weight: 700 900; font-display: swap; src: url("../assets/fonts/poppins-700.woff2") format("woff2"); }
+
+body[data-platform="crimson"] {
+  --font: Poppins, "Segoe UI", system-ui, sans-serif;
+  --font-display: "Playfair Display", Georgia, serif;
+  --cr-card-border: #e9d3dd;
+}
+[data-theme="dark"] body[data-platform="crimson"] {
+  --bg: #0c080e;
+  --grid-line: transparent; /* la cuadrícula es solo de Capibara */
+  --grid-glow: rgba(255, 45, 111, .10);
+  --surface: #140e17;
+  --surface-2: #1a121e;
+  --surface-3: #241829;
+  --border: #2a1c30;
+  --border-strong: #3b2542;
+  --cr-card-border: #34203b;
+  --text: #f7eef3;
+  --text-2: #cdbbc6;
+  --text-3: #8d7a88;
+  --accent: #ff2d6f;
+  --accent-2: #ff5a8d;
+  --accent-soft: rgba(255, 45, 111, .14);
+  --accent-text: #ff6a97;
+  --on-accent: #ffffff;
+  --gold: #ffb020;
+  --glass: rgba(12, 8, 14, .88);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 45, 111, .05);
+}
+[data-theme="light"] body[data-platform="crimson"] {
+  --bg: #fbf4f7;
+  --grid-line: transparent; /* la cuadrícula es solo de Capibara */
+  --grid-glow: rgba(232, 25, 90, .07);
+  --surface: #ffffff;
+  --surface-2: #fdf3f6;
+  --surface-3: #f7e5ec;
+  --border: #f0dbe4;
+  --border-strong: #e4c6d3;
+  --text: #1c0f17;
+  --text-2: #5b4351;
+  --text-3: #9b8290;
+  --accent: #e8195a;
+  --accent-2: #ff2d6f;
+  --accent-soft: rgba(232, 25, 90, .10);
+  --accent-text: #cf0f4e;
+  --on-accent: #ffffff;
+  --glass: rgba(255, 255, 255, .88);
+}
+
+/* Marca y títulos */
+body[data-platform="crimson"] .brand-logo { border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff6a97, #c40d4a); box-shadow: 0 0 18px rgba(255, 45, 111, .45); }
+body[data-platform="crimson"] .brand-name { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .02em; font-weight: 700; }
+body[data-platform="crimson"] .brand-name .hl { color: var(--accent); }
+body[data-platform="crimson"] .brand-sub { color: var(--text-3); }
+body[data-platform="crimson"] .hero h1,
+body[data-platform="crimson"] h2,
+body[data-platform="crimson"] h3 {
+  font-family: var(--font-display); font-style: normal; font-weight: 700; text-transform: uppercase; letter-spacing: .01em;
+}
+body[data-platform="crimson"] .hero h1 { font-size: 30px; }
+body[data-platform="crimson"] .hero h1 .hl { font-style: italic; text-transform: none; }
+body[data-platform="crimson"] h2 { font-size: 16px; }
+body[data-platform="crimson"] .dz-title { font-family: var(--font-display); font-style: italic; text-transform: none; font-weight: 700; font-size: 19px; }
+body[data-platform="crimson"] .label,
+body[data-platform="crimson"] .stat-label,
+body[data-platform="crimson"] .scan-pop-title { letter-spacing: .14em; }
+
+/* Tarjetas con borde morado y fondo apenas degradado */
+body[data-platform="crimson"] .card {
+  border-radius: 20px; border-color: var(--cr-card-border);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+}
+[data-theme="light"] body[data-platform="crimson"] .card { background: var(--surface); }
+body[data-platform="crimson"] .step { background: var(--accent); box-shadow: 0 0 12px rgba(255, 45, 111, .35); }
+body[data-platform="crimson"] .stat { border: 1px solid var(--border); }
+
+/* Píldoras con contorno rosa; activa en rosa claro */
+body[data-platform="crimson"] .scan-chip,
+body[data-platform="crimson"] .platform-btn { border-color: var(--accent); color: var(--accent-text); background: transparent; }
+body[data-platform="crimson"] .mode-switch { border-radius: 16px; border: 1px solid var(--cr-card-border); }
+body[data-platform="crimson"] .mode-switch button { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 13.5px; border-radius: 12px; }
+body[data-platform="crimson"] .mode-switch button[aria-selected="true"],
+body[data-platform="crimson"] .view-tabs button[aria-selected="true"] {
+  background: #ffe3eb; color: #d0104f; box-shadow: 0 6px 18px rgba(255, 45, 111, .18);
+}
+body[data-platform="crimson"] .segmented button[aria-checked="true"] { background: #ffe3eb; color: #d0104f; }
+body[data-platform="crimson"] .chip { border-radius: 999px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+body[data-platform="crimson"] .chip.active { background: var(--accent); color: #fff; }
+body[data-platform="crimson"] .badge { border-radius: 6px; background: var(--accent); color: #fff; text-transform: uppercase; letter-spacing: .06em; font-size: 10px; }
+
+/* Botones */
+body[data-platform="crimson"] .btn { font-weight: 600; letter-spacing: 0; }
+body[data-platform="crimson"] .btn.primary {
+  background: var(--accent); text-transform: none; letter-spacing: 0; font-weight: 700; border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(255, 45, 111, .28);
+}
+body[data-platform="crimson"] .btn.primary:hover:not(:disabled) { background: var(--accent-2); }
+body[data-platform="crimson"] .btn.secondary { border-color: var(--accent); color: var(--accent-text); background: transparent; border-radius: 999px; }
+body[data-platform="crimson"] .btn.secondary:hover:not(:disabled) { background: var(--accent-soft); }
+
+/* Campos */
+body[data-platform="crimson"] input[type="text"], body[data-platform="crimson"] input[type="number"],
+body[data-platform="crimson"] input[type="password"], body[data-platform="crimson"] input[type="email"],
+body[data-platform="crimson"] input[type="datetime-local"], body[data-platform="crimson"] select,
+body[data-platform="crimson"] textarea, body[data-platform="crimson"] .combo-trigger {
+  border-radius: 14px; background-color: var(--surface-2); border-color: var(--border-strong);
+}
+body[data-platform="crimson"] .switch input:checked + span { background: var(--accent); border-color: var(--accent); }
+
+/* Páginas y lista */
+body[data-platform="crimson"] .dropzone { border-color: var(--cr-card-border); border-radius: 20px; }
+body[data-platform="crimson"] .thumb { border-radius: 14px; border: 1px solid var(--cr-card-border); }
+body[data-platform="crimson"] .chrow { border-color: var(--cr-card-border); border-radius: 16px; }
+body[data-platform="crimson"] .progress-bar { background: linear-gradient(90deg, #c40d4a, var(--accent), var(--accent-2)); }
+body[data-platform="crimson"] .modal-card { border-color: var(--cr-card-border); border-radius: 22px; }
+body[data-platform="crimson"] .topbar { border-bottom-color: var(--border); }

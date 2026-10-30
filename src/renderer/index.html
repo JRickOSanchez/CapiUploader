@@ -5,7 +5,19 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; img-src 'self' file: data: blob: https:; style-src 'self'; script-src 'self'; connect-src 'none'" />
   <title>CapiUploader</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/upload.css" />
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/scans.css" />
+  <link rel="stylesheet" href="css/batch-groups.css" />
+  <link rel="stylesheet" href="css/sections.css" />
+  <link rel="stylesheet" href="css/uploaded.css" />
+  <link rel="stylesheet" href="css/newwork.css" />
+  <link rel="stylesheet" href="css/diagnostics.css" />
+  <link rel="stylesheet" href="css/platforms.css" />
+  <link rel="stylesheet" href="css/platform-crimson.css" />
+  <link rel="stylesheet" href="css/platform-mangation.css" />
 </head>
 <body>
   <!-- ===== Barra superior ===== -->
@@ -16,7 +28,7 @@
       </div>
       <div class="brand-text">
         <span class="brand-name">Capi<span class="hl">Uploader</span></span>
-        <span class="brand-sub">Capibara Traductor</span>
+        <span class="brand-sub" id="brandSub">Capibara Traductor</span>
       </div>
     </div>
 
@@ -24,10 +36,7 @@
       <button type="button" role="tab" data-view="upload">
         <svg viewBox="0 0 24 24"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg>Subir
       </button>
-      <button type="button" role="tab" data-view="import">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Importar de web
-      </button>
-      <button type="button" role="tab" data-view="download">
+      <button type="button" role="tab" data-view="download" data-cap="download">
         <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-6-6m6 6 6-6"/></svg>Descargar
       </button>
     </nav>
@@ -37,6 +46,19 @@
         <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1"/></svg>
         <span id="updateChipText">Actualización</span>
       </button>
+      <!-- Plataforma a la que se sube: cambia obras, formularios y tema -->
+      <div class="platform-menu" id="platformWrap">
+        <button class="platform-btn" id="platformBtn" type="button" title="Cambiar de plataforma" aria-haspopup="menu" aria-expanded="false">
+          <span class="platform-mark" id="platformMark" aria-hidden="true"></span>
+          <span class="platform-name" id="platformName">Capibara</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="scan-pop platform-pop" id="platformMenu" role="menu" hidden>
+          <div class="scan-pop-title">Subir a</div>
+          <ul class="scan-pop-list" id="platformList"></ul>
+          <p class="platform-pop-hint">Cada plataforma tiene sus obras, sus opciones y su propio estilo.</p>
+        </div>
+      </div>
       <div class="scan-menu" id="scanMenuWrap">
         <button class="scan-chip" id="scanChip" type="button" title="Cambiar de scan" aria-haspopup="menu" aria-expanded="false">
           <span class="dot" id="scanDot"></span>
@@ -67,6 +89,9 @@
           <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
         </button>
       </div>
+      <button class="icon-btn" id="prefsBtn" type="button" title="Ajustes">
+        <svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+      </button>
       <button class="icon-btn" id="settingsBtn" type="button" title="Mis scans y API keys">
         <svg viewBox="0 0 24 24"><path d="M15 7a4 4 0 1 1-3.9 4.9L4 19v2h3v-2h2v-2h2l1.1-1.1A4 4 0 0 1 15 7Z"/><circle cx="16" cy="10" r="1"/></svg>
       </button>
@@ -79,7 +104,7 @@
       <!-- Encabezado -->
       <div class="hero">
         <h1><span class="single-only">Subir</span><span class="batch-only">Subir</span> <span class="hl"><span class="single-only">capítulo</span><span class="batch-only">capítulos</span></span></h1>
-        <p>Publica en Capibara Traductor directo desde tu escritorio.</p>
+        <p><span class="hero-kana" id="heroKana" aria-hidden="true"></span><span id="heroSub">Publica en Capibara Traductor directo desde tu escritorio.</span></p>
       </div>
 
       <!-- Modo -->
@@ -102,6 +127,9 @@
             <h2>Elige la <span class="hl">obra</span></h2>
             <p class="muted"><span class="single-only">Elige a qué obra pertenece el capítulo.</span><span class="batch-only">Obra predeterminada para las carpetas que agregues. Cada grupo puede ir a otra obra.</span></p>
           </div>
+          <button class="btn small secondary" id="newWorkBtn" type="button" title="Crear una obra nueva">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nueva obra
+          </button>
           <button class="icon-btn small ghost" id="reloadWorks" type="button" title="Recargar obras">
             <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
           </button>
@@ -119,7 +147,7 @@
               <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <input type="text" id="workSearch" placeholder="Buscar obra…" autocomplete="off" spellcheck="false" />
             </div>
-            <div class="chips" id="langChips">
+            <div class="chips" id="langChips" data-cap="languages">
               <button type="button" class="chip active" data-lang="">Todas</button>
               <button type="button" class="chip" data-lang="es">ES</button>
               <button type="button" class="chip" data-lang="en">EN</button>
@@ -142,7 +170,7 @@
           </div>
         </div>
         <div class="grid-2">
-          <label class="field">
+          <label class="field" data-cap="volume">
             <span class="label">Tomo por defecto</span>
             <input type="number" id="batchVolume" step="1" min="0" placeholder="Opcional" />
             <span class="hint">Para carpetas sin tomo en el nombre.</span>
@@ -164,7 +192,7 @@
           <span class="step">2</span>
           <div>
             <h2>Detalles <span class="hl">del capítulo</span></h2>
-            <p class="muted">Número, tomo y título opcional.</p>
+            <p class="muted"><span data-cap="volume">Número, tomo y título opcional.</span><span data-cap-not="volume">Número y título opcional.</span></p>
           </div>
         </div>
 
@@ -174,7 +202,7 @@
             <input type="number" id="chNumber" step="any" min="0" placeholder="Ej. 13 o 12.5" />
             <span class="hint" id="chNumberHint"></span>
           </label>
-          <label class="field">
+          <label class="field" data-cap="volume">
             <span class="label">Tomo / Volumen</span>
             <input type="number" id="chVolume" step="1" min="0" placeholder="Opcional" />
             <span class="hint" id="chVolumeHint"></span>
@@ -184,7 +212,7 @@
           <span class="label">Título del capítulo <span class="counter" id="titleCounter">0/256</span></span>
           <input type="text" id="chTitle" maxlength="256" placeholder="Opcional — p. ej. «El regreso»" />
         </label>
-        <div class="option">
+        <div class="option" data-cap="extras">
           <div class="option-text">
             <span class="option-title">Es un extra (arte, ilustración, contenido fuera de capítulos)</span>
             <span class="option-desc">Se muestra como «Extra N» y no cuenta como capítulo. Los extras llevan su propia numeración.</span>
@@ -194,7 +222,7 @@
       </div>
 
       <!-- Publicación -->
-      <div class="card">
+      <div class="card" data-cap="publish">
         <div class="card-head">
           <span class="step">3</span>
           <div>
@@ -203,14 +231,14 @@
           </div>
         </div>
 
-        <div class="option">
+        <div class="option" data-cap="schedule">
           <div class="option-text">
             <span class="option-title">Programar publicación</span>
             <span class="option-desc">Si está apagado, se publica en cuanto termine la subida.</span>
           </div>
           <label class="switch"><input type="checkbox" id="scheduleToggle" /><span></span></label>
         </div>
-        <div class="reveal" id="scheduleBox" hidden>
+        <div class="reveal" id="scheduleBox" data-cap="schedule" hidden>
           <label class="field">
             <span class="label"><span class="single-only">Fecha y hora de publicación</span><span class="batch-only">Publicar el primer capítulo el</span></span>
             <input type="datetime-local" id="publishAt" />
@@ -231,19 +259,19 @@
           </div>
         </div>
 
-        <div class="divider"></div>
+        <div class="divider" data-cap="notify"></div>
 
-        <div class="option" id="notifyOption">
+        <div class="option" id="notifyOption" data-cap="notify">
           <div class="option-text">
-            <span class="option-title">Avisar a seguidores</span>
+            <span class="option-title" id="notifyTitle">Avisar a seguidores</span>
             <span class="option-desc" id="notifyDesc">Notificaciones, correos, webhooks y Discord. Apágalo para subir capítulos viejos en silencio.</span>
           </div>
           <label class="switch"><input type="checkbox" id="notifyToggle" checked /><span></span></label>
         </div>
 
-        <div class="divider"></div>
+        <div class="divider" data-cap="announce"></div>
 
-        <label class="field">
+        <label class="field" data-cap="announce">
           <span class="label">Página destacada <span class="badge featured">★</span></span>
           <select id="announceDefault">
             <option value="default" selected>Si no marco ninguna ★: la del scan por defecto</option>
@@ -268,6 +296,9 @@
             <button type="button" class="btn ghost small" id="batchSortBtn" title="Ordenar por número de capítulo">
               <svg viewBox="0 0 24 24"><path d="M3 6h10M3 12h7M3 18h4m10-12v14m0 0-3-3m3 3 3-3"/></svg>Ordenar
             </button>
+            <button type="button" class="btn ghost small" id="batchImportBtn" title="Traer capítulos de otra web (se abre en otra ventana)">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Importar de web
+            </button>
             <button type="button" class="btn ghost small" id="batchAddBtn" title="Agregar más carpetas">
               <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Agregar
             </button>
@@ -286,6 +317,7 @@
             <p class="dz-sub">Una carpeta por capítulo, o <span class="link">una carpeta que contenga varias</span></p>
             <div class="dz-actions">
               <button type="button" class="btn primary" id="batchPickBtn">Seleccionar carpetas</button>
+              <button type="button" class="btn secondary" id="batchImportEmpty" title="Se abre en otra ventana"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Importar de otra web</button>
             </div>
             <p class="dz-formats">El número se toma del nombre: «Cap 12», «Capítulo 12.5», «Vol 3 Ch 20 - Título», «013»… · También acepta PSD</p>
           </div>
@@ -308,7 +340,7 @@
             <button type="button" class="btn ghost small" id="uploadedToggle" title="Mostrar u ocultar la lista">
               <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><span>Ocultar</span>
             </button>
-            <button type="button" class="btn ghost small danger" id="uploadedClear" title="Vaciar la lista (no borra nada de Capibara)">
+            <button type="button" class="btn ghost small danger" id="uploadedClear" title="Vaciar la lista (no borra nada de la plataforma)">
               <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Vaciar
             </button>
           </div>
@@ -370,8 +402,27 @@
     <div class="progress-wrap" id="progressWrap" hidden>
       <div class="progress-label"><span id="progressText">Preparando…</span><span id="progressPct">0%</span></div>
       <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="platform-progress" id="platformProgress" hidden></div>
     </div>
     <div class="actions">
+      <div class="also" id="alsoWrap">
+        <button type="button" class="btn ghost also-btn" id="alsoBtn" aria-haspopup="dialog" aria-expanded="false" title="Subir el mismo capítulo a la vez a otras plataformas (opcional)">
+          <svg viewBox="0 0 24 24"><path d="M8 7h11m0 0-3-3m3 3-3 3M16 17H5m0 0 3-3m-3 3 3 3"/></svg>
+          <span id="alsoBtnText">También a…</span>
+          <span class="also-dots" id="alsoDots"></span>
+        </button>
+        <div class="also-pop" id="alsoPop" role="dialog" aria-label="Subir también a otras plataformas" hidden>
+          <div class="also-head">
+            <strong>Subir también a</strong>
+            <span class="muted">Opcional. Cada capítulo se sube a la vez a las plataformas marcadas: las páginas se leen y se convierten una sola vez, y si una falla, al reintentar solo se sube a esa.</span>
+          </div>
+          <ul class="also-list" id="alsoList"></ul>
+          <div class="also-foot">
+            <button type="button" class="btn ghost small" id="alsoOff">Solo a la plataforma activa</button>
+            <button type="button" class="btn primary small" id="alsoDone">Listo</button>
+          </div>
+        </div>
+      </div>
       <button type="button" class="btn ghost" id="resetBtn">Limpiar formulario</button>
       <button type="button" class="btn danger-solid" id="cancelBtn" hidden>Cancelar</button>
       <button type="button" class="btn primary lg" id="uploadBtn" disabled>
@@ -386,7 +437,7 @@
     <section class="column column-form">
       <div class="hero">
         <h1>Importar de <span class="hl">web</span></h1>
-        <p>Trae los capítulos de tu obra desde otra web de manga y súbelos a Capibara.</p>
+        <p>Trae los capítulos de tu obra desde otra web de manga y súbelos a <span data-platform-label>Capibara</span>.</p>
       </div>
 
       <div class="card">
@@ -403,14 +454,14 @@
         </div>
         <span class="hint" id="imUrlHint"></span>
         <div class="im-site" id="imSite" hidden></div>
-        <p class="hint" id="imCatalog">Compatible con más de 800 webs gracias al motor de HaruNeko, y con webs hechas con los temas Madara o MangaStream.</p>
+        <p class="hint" id="imCatalog">Compatible con más de 800 webs gracias al motor de HaruNeko, y con webs hechas con los temas Madara o MangaStream. MangaTV, ONF Mangas, MangaDex, ShadeManga, ZonaTMO, Dark Gathering y Enchilada Scan se leen con lectores propios.</p>
       </div>
 
       <div class="card">
         <div class="card-head">
           <span class="step">2</span>
           <div>
-            <h2>Obra en <span class="hl">Capibara</span></h2>
+            <h2>Obra en <span class="hl" data-platform-label>Capibara</span></h2>
             <p class="muted">Los capítulos se agregan a una obra que ya existe en tu scan.</p>
           </div>
         </div>
@@ -424,7 +475,7 @@
           <span class="step">3</span>
           <div>
             <h2>Antes de <span class="hl">importar</span></h2>
-            <p class="muted">Al terminar, los capítulos pasan a «Subir · Varios capítulos» para que los revises antes de subirlos.</p>
+            <p class="muted">Al terminar, los capítulos pasan a «Varios capítulos» en la ventana principal, para que los revises antes de subirlos.</p>
           </div>
         </div>
         <div class="field">
@@ -458,7 +509,7 @@
         <div class="toolbar list-tools" id="imToolbar" hidden>
           <select id="imLang" class="im-lang" title="Idioma de los capítulos" hidden></select>
           <select id="imGroup" class="im-lang im-group" title="Scan que subió cada versión del capítulo" hidden></select>
-          <button type="button" class="btn ghost small" id="imMissing" title="Marcar los que aún no están en Capibara">Los que faltan</button>
+          <button type="button" class="btn ghost small" id="imMissing" title="Marcar los que aún no están en tu obra">Los que faltan</button>
           <button type="button" class="btn ghost small" id="imAll">Todos</button>
           <button type="button" class="btn ghost small" id="imNone">Ninguno</button>
           <div class="dl-range">
@@ -636,6 +687,173 @@
     </div>
   </div>
 
+  <!-- ===== Modal: ajustes ===== -->
+  <!-- Cuenta de Crimson Scan o Mangation -->
+  <div class="modal" id="accountModal" hidden>
+    <div class="modal-card account-card" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+      <div class="modal-head">
+        <div class="modal-icon platform-mark" id="accountMark" aria-hidden="true"></div>
+        <div>
+          <h3 id="accountTitle">Tu cuenta</h3>
+          <p class="muted" id="accountSub"></p>
+        </div>
+      </div>
+      <div class="account-status" id="accountStatus" hidden></div>
+      <form class="account-form" id="accountForm" autocomplete="off">
+        <label class="field">
+          <span class="label" id="accountUserLabel">Usuario</span>
+          <input type="text" id="accountUser" autocomplete="username" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span class="label">Contraseña</span>
+          <div class="input-group">
+            <input type="password" id="accountPass" autocomplete="current-password" />
+            <button type="button" class="icon-btn small ghost" id="accountReveal" title="Mostrar/ocultar">
+              <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </label>
+        <span class="hint error" id="accountError"></span>
+        <p class="hint">La contraseña no se guarda: solo la sesión, cifrada con el almacén seguro de Windows.</p>
+      </form>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost danger" id="accountOut" hidden>Cerrar sesión</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="accountCancel">Cerrar</button>
+        <button type="button" class="btn primary" id="accountSave">Iniciar sesión</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Obra nueva en Crimson Scan o Mangation -->
+  <div class="modal" id="altWorkModal" hidden>
+    <div class="modal-card altwork-card" role="dialog" aria-modal="true" aria-labelledby="altWorkTitle">
+      <div class="modal-head">
+        <div class="modal-icon platform-mark" id="altWorkMark" aria-hidden="true"></div>
+        <div>
+          <h3 id="altWorkTitle">Nueva obra</h3>
+          <p class="muted" id="altWorkSub"></p>
+        </div>
+      </div>
+      <div class="altwork-body">
+        <div class="altwork-images">
+          <button type="button" class="altwork-cover" id="awCover" title="Elegir la portada">
+            <img id="awCoverImg" alt="" hidden />
+            <span class="altwork-ph" id="awCoverPh">Portada<small id="awCoverReq"></small></span>
+          </button>
+          <button type="button" class="altwork-banner" id="awBanner" data-aw="banner" title="Elegir el banner (opcional)">
+            <img id="awBannerImg" alt="" hidden />
+            <span class="altwork-ph">Banner<small>opcional</small></span>
+          </button>
+        </div>
+        <div class="altwork-fields">
+          <label class="field">
+            <span class="label">Título <em>*</em> <span class="counter" id="awTitleCount"></span></span>
+            <input type="text" id="awTitle" spellcheck="false" />
+          </label>
+          <div class="grid-2">
+            <label class="field"><span class="label">Tipo</span><select id="awType"></select></label>
+            <label class="field"><span class="label">Estado</span><select id="awStatus"></select></label>
+          </div>
+          <label class="field" data-aw="demography"><span class="label">Demografía</span><select id="awDemography"></select></label>
+          <label class="field">
+            <span class="label">Sinopsis <span class="counter" id="awDescCount"></span></span>
+            <textarea id="awDesc" rows="4"></textarea>
+          </label>
+          <div class="field">
+            <span class="label">Géneros <span class="counter" id="awGenreCount"></span></span>
+            <input type="text" id="awGenreSearch" placeholder="Filtrar géneros…" autocomplete="off" spellcheck="false" />
+            <div class="aw-genres" id="awGenres"></div>
+          </div>
+          <div class="option">
+            <div class="option-text">
+              <span class="option-title">Contenido para adultos (+18)</span>
+              <span class="option-desc">La plataforma la marca como tal.</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="awAdult" /><span></span></label>
+          </div>
+        </div>
+      </div>
+      <span class="hint error" id="awError"></span>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="awCancel">Cancelar</button>
+        <button type="button" class="btn primary" id="awSave">Crear obra</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="prefsModal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-icon"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></div>
+        <div>
+          <h3><span class="hl">Ajustes</span></h3>
+          <p class="muted">Se guardan en este equipo.</p>
+        </div>
+        <span class="spacer"></span>
+        <button type="button" class="icon-btn small ghost" id="prefsClose" title="Cerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="option">
+        <div class="option-text">
+          <span class="option-title">Aceleración gráfica</span>
+          <span class="option-desc">Usa la tarjeta de video para dibujar la ventana. Apagada ahorra cerca de 100 MB de memoria, pero las animaciones y las listas largas de páginas pueden ir menos fluidas en equipos lentos.</span>
+        </div>
+        <label class="switch"><input type="checkbox" id="prefGpu" /><span></span></label>
+      </div>
+      <p class="hint" id="prefGpuState"></p>
+      <div class="divider"></div>
+      <div class="option">
+        <div class="option-text">
+          <span class="option-title">Diagnóstico</span>
+          <span class="option-desc">Lo que hizo la app y lo que falló, sin claves ni contraseñas. Si algo no funciona, cópialo y mándalo a soporte.</span>
+        </div>
+        <button type="button" class="btn secondary small" id="prefsDiag">Ver registro</button>
+      </div>
+      <div class="option">
+        <div class="option-text">
+          <span class="option-title">Novedades</span>
+          <span class="option-desc">Qué trae la versión que tienes instalada.</span>
+        </div>
+        <button type="button" class="btn secondary small" id="prefsNews">Ver novedades</button>
+      </div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn secondary" id="prefsRelaunch" hidden>Reiniciar ahora</button>
+        <button type="button" class="btn primary" id="prefsDone">Listo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: registro de diagnóstico ===== -->
+  <div class="modal" id="diagModal" hidden>
+    <div class="modal-card wide diag-card">
+      <div class="modal-head">
+        <div class="modal-icon"><svg viewBox="0 0 24 24"><path d="M9 4h6M10 4v5L5 19a1 1 0 0 0 .9 1.5h12.2A1 1 0 0 0 19 19l-5-10V4"/><path d="M7.5 14h9"/></svg></div>
+        <div>
+          <h3>Registro de <span class="hl">diagnóstico</span></h3>
+          <p class="muted" id="diagSub">Las últimas entradas de esta sesión y de las anteriores.</p>
+        </div>
+        <span class="spacer"></span>
+        <button type="button" class="icon-btn small ghost" id="diagClose" title="Cerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="diag-toolbar">
+        <div class="segmented" role="radiogroup" aria-label="Qué mostrar" id="diagLevel">
+          <button type="button" role="radio" data-level="info" aria-checked="true">Todo</button>
+          <button type="button" role="radio" data-level="warn" aria-checked="false">Avisos y errores</button>
+        </div>
+        <span class="spacer"></span>
+        <span class="hint" id="diagCount"></span>
+      </div>
+      <ol class="diag-list" id="diagList"></ol>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost danger" id="diagClear">Vaciar</button>
+        <button type="button" class="btn ghost" id="diagFolder">Abrir carpeta</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn primary" id="diagCopy">Copiar para soporte</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== Selector flotante de obra (varios capítulos) ===== -->
   <div class="work-picker" id="workPicker" hidden>
     <div class="combo-search">
@@ -652,7 +870,7 @@
       <h3 id="doneTitle">¡Capítulo subido!</h3>
       <p class="muted" id="doneText"></p>
       <div class="modal-actions centered">
-        <button type="button" class="btn secondary" id="doneOpen">Ver en Capibara</button>
+        <button type="button" class="btn secondary" id="doneOpen">Ver en la web</button>
         <button type="button" class="btn primary" id="doneNext">Subir otro capítulo</button>
       </div>
     </div>
@@ -674,6 +892,131 @@
         <input id="askInput" autocomplete="off" spellcheck="false" />
       </label>
       <div class="modal-actions" id="askActions"></div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: obra nueva ===== -->
+  <div class="modal" id="nwModal" hidden>
+    <div class="modal-card nw-card">
+      <div class="modal-head">
+        <div class="modal-icon"><svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h12v15H6.5a2.5 2.5 0 0 0 0 5H18"/><path d="M12 7v6M9 10h6"/></svg></div>
+        <div>
+          <h3>Nueva obra en <span class="hl">Capibara</span></h3>
+          <p class="muted">Se crea privada en tu scan; la publicas cuando esté lista.</p>
+        </div>
+        <span class="spacer"></span>
+        <button type="button" class="icon-btn small ghost" id="nwClose" title="Cerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+
+      <div class="nw-body">
+        <div class="nw-row">
+          <label class="field">
+            <span class="label">Título<em>*</em> <span class="counter" id="nwTitleCount">0/256</span></span>
+            <input type="text" id="nwTitle" maxlength="256" placeholder="Como se verá en tu scan" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field nw-lang">
+            <span class="label">Idioma</span>
+            <select id="nwLang">
+              <option value="es">Español</option>
+              <option value="en">Inglés</option>
+              <option value="pt">Portugués</option>
+            </select>
+          </label>
+        </div>
+        <div class="nw-base" id="nwBase" hidden></div>
+
+        <label class="field">
+          <span class="label">Título alternativo</span>
+          <input type="text" id="nwAlt" maxlength="256" placeholder="Opcional — p. ej. el título original" autocomplete="off" spellcheck="false" />
+        </label>
+
+        <div id="nwNewBase">
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">Tipo<em>*</em></span>
+              <select id="nwType"></select>
+            </label>
+            <label class="field">
+              <span class="label">Demografía<em>*</em></span>
+              <select id="nwDemo"></select>
+            </label>
+          </div>
+          <div class="field">
+            <span class="label">Autores<em>*</em> <span class="counter" id="nwAuthorCount">0/10</span></span>
+            <div class="nw-authors" id="nwAuthors">
+              <input type="text" id="nwAuthorSearch" placeholder="Busca por nombre (mín. 2 letras)" autocomplete="off" spellcheck="false" />
+            </div>
+            <ul class="nw-suggest" id="nwAuthorList" hidden></ul>
+            <span class="hint">Si el autor no aparece, agrégalo desde el panel de Capibara: la API solo usa autores que ya existen.</span>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <label class="field">
+            <span class="label">Estado</span>
+            <select id="nwStatus">
+              <option value="ongoing">En emisión</option>
+              <option value="completed">Finalizada</option>
+              <option value="hiatus">En pausa</option>
+              <option value="cancelled">Cancelada</option>
+            </select>
+          </label>
+          <div class="field">
+            <span class="label">Contenido</span>
+            <label class="nw-check"><input type="checkbox" id="nwNsfw" /> Es +18</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label">Géneros <span class="counter" id="nwGenreCount">0/30</span></span>
+          <div class="nw-genres" id="nwGenres"></div>
+        </div>
+
+        <label class="field">
+          <span class="label">Descripción corta <span class="counter" id="nwShortCount">0/300</span></span>
+          <textarea id="nwShort" maxlength="300" rows="2" placeholder="Una o dos frases para las tarjetas"></textarea>
+        </label>
+        <label class="field">
+          <span class="label">Sinopsis</span>
+          <textarea id="nwDesc" maxlength="20000" rows="5" placeholder="Opcional"></textarea>
+        </label>
+
+        <div class="nw-images">
+          <div class="field">
+            <span class="label">Portada <span class="counter">1200×1800</span></span>
+            <div class="nw-image nw-image-cover" id="nwCoverBox"></div>
+            <span class="hint" id="nwCoverHint"></span>
+          </div>
+          <div class="field">
+            <span class="label">Banner <span class="counter">2300×650</span></span>
+            <div class="nw-image nw-image-banner" id="nwBannerBox"></div>
+            <span class="hint" id="nwBannerHint"></span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="option">
+          <div class="option-text">
+            <span class="option-title">Publicarla al crearla</span>
+            <span class="option-desc">Apagado, queda privada: la publicas después desde el panel de tu scan.</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="nwPublish" /><span></span></label>
+        </div>
+        <div class="option reveal" id="nwNotifyOpt" hidden>
+          <div class="option-text">
+            <span class="option-title">Avisar a seguidores</span>
+            <span class="option-desc">Notificaciones, webhooks y Discord del scan.</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="nwNotify" checked /><span></span></label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <span class="hint error nw-error" id="nwError"></span>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="nwCancel">Cancelar</button>
+        <button type="button" class="btn primary" id="nwCreate">Crear obra</button>
+      </div>
     </div>
   </div>
 
@@ -709,12 +1052,25 @@
 
   <div class="toasts" id="toasts"></div>
   <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.avif,.psd,.psb,image/jpeg,image/png,image/webp,image/gif,image/avif" hidden />
-
-  <script src="app.js"></script>
-  <script src="batch.js"></script>
-  <script src="download.js"></script>
-  <script src="import.js"></script>
-  <script src="update.js"></script>
-  <script src="views.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/platforms.js"></script>
+  <script src="js/scans.js"></script>
+  <script src="js/works.js"></script>
+  <script src="js/names.js"></script>
+  <script src="js/picker.js"></script>
+  <script src="js/single.js"></script>
+  <script src="js/batch.js"></script>
+  <script src="js/uploaded.js"></script>
+  <script src="js/batch-upload.js"></script>
+  <script src="js/download.js"></script>
+  <script src="js/import.js"></script>
+  <script src="js/newwork.js"></script>
+  <script src="js/newwork-alt.js"></script>
+  <script src="js/also.js"></script>
+  <script src="js/update.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/diagnostics.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/boot.js"></script>
 </body>
 </html>

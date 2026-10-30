@@ -2,7 +2,7 @@
 
 /* =========================================================
    Modo «Varios capítulos»
-   Usa las utilidades y el estado globales de app.js.
+   Usa el estado y las utilidades globales de core.js.
    Cada capítulo lleva su propia obra (del scan activo).
    ========================================================= */
 const batch = {
@@ -36,15 +36,7 @@ const ICON_PAGES = '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height
 const ICON_BOOK = '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>'
 
 const sumSize = (files) => files.reduce((s, f) => s + f.size, 0)
-const UNIT_TEXT = {
-  minutes: ['minuto', 'minutos'], hours: ['hora', 'horas'], days: ['día', 'días'], weeks: ['semana', 'semanas'],
-}
-/** «1 día», «3 días», «cada día» en vez de «cada 1 días». */
-const amount = (n, unit) => `${n} ${UNIT_TEXT[unit][n === 1 ? 0 : 1]}`
-const every = (n, unit) => (n === 1 ? `cada ${UNIT_TEXT[unit][0]}` : `cada ${amount(n, unit)}`)
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
-const workById = (id) => (id == null ? null : state.works.find((w) => w.id === id) || null)
 const pendingItems = () => batch.items.filter((i) => i.status !== 'done')
 const ICON_OPEN = '<svg viewBox="0 0 24 24"><path d="M14 4h6v6m0-6-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
 
@@ -59,221 +51,6 @@ function numberRanges(nums) {
     i = j
   }
   return out.join(', ')
-}
-
-/* ---------- Preguntas ---------- */
-
-let askChain = Promise.resolve()
-
-/**
- * Muestra una pregunta y resuelve con el `value` del botón elegido.
- * Escape o un clic fuera eligen el botón marcado con `cancel`. Las preguntas se encolan.
- * Con `input` ({ label, value, type }) muestra un campo y resuelve con { value, input }; Enter
- * en el campo elige el botón principal.
- */
-function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, input = null }) {
-  const run = () => new Promise((resolve) => {
-    const modal = $('#askModal')
-    const cancel = buttons.find((b) => b.cancel) || buttons[0]
-    $('#askIcon').innerHTML = kind === 'info' ? ICONS.info : ICONS.warn
-    $('#askIcon').className = `modal-icon ${kind}`
-    $('#askTitle').textContent = title
-    $('#askText').textContent = text
-    const ul = $('#askList')
-    ul.innerHTML = ''
-    list.forEach((line) => ul.append(el('li', { text: line })))
-    if (more > 0) ul.append(el('li', { class: 'more', text: `…y ${more} más` }))
-    ul.hidden = !list.length
-    const field = $('#askInput')
-    $('#askInputWrap').hidden = !input
-    if (input) {
-      $('#askInputLabel').textContent = input.label || ''
-      field.type = input.type || 'text'
-      field.value = input.value ?? ''
-    }
-    const actions = $('#askActions')
-    actions.innerHTML = ''
-    const done = (value) => {
-      modal.hidden = true
-      document.removeEventListener('keydown', onKey, true)
-      modal.removeEventListener('mousedown', onBackdrop)
-      field.onkeydown = null
-      resolve(input ? { value, input: field.value.trim() } : value)
-    }
-    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(cancel.value) } }
-    const onBackdrop = (e) => { if (e.target === modal) done(cancel.value) }
-    buttons.forEach((b, i) => {
-      if (i === 1 && buttons.length > 2) actions.append(el('span', { class: 'spacer' }))
-      actions.append(el('button', { type: 'button', class: `btn ${b.kind || 'secondary'}`, onclick: () => done(b.value) }, b.label))
-    })
-    if (buttons.length <= 2) actions.prepend(el('span', { class: 'spacer' }))
-    document.addEventListener('keydown', onKey, true)
-    modal.addEventListener('mousedown', onBackdrop)
-    modal.hidden = false
-    // El foco va al botón marcado con focus, si no a la opción recomendada y si no a la de cancelar
-    // (nunca a una peligrosa).
-    const target = buttons.find((b) => b.focus) || buttons.find((b) => b.kind === 'primary') || cancel
-    if (input) {
-      const primary = buttons.find((b) => b.kind === 'primary')
-      field.onkeydown = (e) => { if (e.key === 'Enter' && primary) { e.preventDefault(); done(primary.value) } }
-      field.focus()
-      field.select()
-    } else {
-      ;[...actions.querySelectorAll('button')][buttons.indexOf(target)]?.focus()
-    }
-  })
-  const p = askChain.then(run)
-  askChain = p.catch(() => {})
-  return p
-}
-
-/* ---------- Detección de número, tomo y título ---------- */
-
-// «Extra 2», «Especial», «Omake 1», «Bonus»… Solo cuenta si va antes del «Cap N», para no tomar
-// como extra un «Cap 12 - Un día especial».
-const EXTRA_RE = /\b(?:extras?|especial(?:es)?|specials?|omake|bonus)\b(?:\s*[.#:-]?\s*(\d+(?:[.,]\d+)?))?/i
-
-/**
- * Interpreta nombres de carpeta como «Cap 12», «Capítulo 12.5 - El regreso»,
- * «Vol 3 Ch 20», «[Scan] Kirara 015», «013» o «Extra 2 - Ilustraciones».
- */
-function parseChapterName(raw) {
-  const name = raw.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim()
-  const clean = name.replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
-  const volRe = /\b(?:vol(?:umen|ume)?|tomo|v)\s*[.#:-]?\s*(\d+)\b/i
-  const capRe = /\b(?:cap(?:[ií]tulo|itulo)?|chapter|chap|ch|ep(?:isodio|isode)?|c)\s*[.#:-]?\s*(\d+(?:[.,]\d+)?)/i
-  const titleAfter = (rest) => {
-    const m = rest.match(/^\s*[-–—:|]\s*(.+)$/)
-    return m ? m[1].trim().slice(0, 256) : ''
-  }
-
-  const vol = clean.match(volRe)
-  const cap = clean.match(capRe)
-  const ex = clean.match(EXTRA_RE)
-  let number = null
-  let title = ''
-  if (ex && (!cap || ex.index < cap.index)) {
-    return {
-      number: ex[1] ? parseFloat(ex[1].replace(',', '.')) : null,
-      volume: vol ? parseInt(vol[1], 10) : null,
-      title: titleAfter(clean.slice(ex.index + ex[0].length)),
-      extra: true,
-    }
-  }
-  if (cap) {
-    number = parseFloat(cap[1].replace(',', '.'))
-    title = titleAfter(clean.slice(cap.index + cap[0].length))
-  } else {
-    const withoutVol = vol ? clean.replace(vol[0], ' ') : clean
-    const nums = [...withoutVol.matchAll(/\d+(?:[.,]\d+)?/g)]
-    if (nums.length) {
-      // Si el nombre empieza con número («013 - Título») se usa ese; si no, el último.
-      const pick = /^\s*\d/.test(withoutVol) ? nums[0] : nums[nums.length - 1]
-      number = parseFloat(pick[0].replace(',', '.'))
-      title = titleAfter(withoutVol.slice(pick.index + pick[0].length))
-    }
-  }
-  return { number, volume: vol ? parseInt(vol[1], 10) : null, title, extra: false }
-}
-
-/* ---------- Detección de la obra por el nombre de la carpeta ---------- */
-
-const normTitle = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .replace(/[^a-z0-9]+/g, ' ').trim()
-
-function bigramSet(s) {
-  const t = ` ${s} `
-  const out = []
-  for (let i = 0; i < t.length - 1; i++) out.push(t.slice(i, i + 2))
-  return out
-}
-
-/** Coeficiente de Dice sobre bigramas: 1 = iguales, 0 = nada en común. */
-function similarity(a, b) {
-  if (!a || !b) return 0
-  if (a === b) return 1
-  const A = bigramSet(a)
-  const B = bigramSet(b)
-  const counts = new Map()
-  for (const g of B) counts.set(g, (counts.get(g) || 0) + 1)
-  let hits = 0
-  for (const g of A) {
-    const c = counts.get(g)
-    if (c) { hits++; counts.set(g, c - 1) }
-  }
-  return (2 * hits) / (A.length + B.length)
-}
-
-/** Devuelve { work, sure } si el nombre de la carpeta se parece a alguna obra del scan. */
-function matchWork(folderName) {
-  const n = normTitle(folderName)
-  if (n.length < 3 || !state.works.length) return null
-  let best = null
-  let score = 0
-  for (const w of state.works) {
-    const names = [w.title, w.alternativeTitle, w.slug && w.slug.replace(/-/g, ' ')].filter(Boolean)
-    for (const t of names) {
-      const m = normTitle(t)
-      let sc = similarity(n, m)
-      // «Kirara» dentro de «Kirara Hoshikita quiere brillar»
-      if (n.length >= 4 && m.length >= 4 && (m.includes(n) || n.includes(m))) sc = Math.max(sc, 0.62 + 0.38 * (Math.min(n.length, m.length) / Math.max(n.length, m.length)))
-      if (sc > score) { score = sc; best = w }
-    }
-  }
-  if (score >= 0.85) return { work: best, sure: true, score }
-  if (score >= 0.6) return { work: best, sure: false, score }
-  return null
-}
-
-const VOL_RE = /\b(?:vol(?:umen|ume)?|tomo|v)\s*[.#:-]?\s*(\d+)\b/i
-const CAP_RE = /\b(?:cap(?:[ií]tulo|itulo)?|chapter|chap|ch|ep(?:isodio|isode)?|c)\s*[.#:-]?\s*(\d+(?:[.,]\d+)?)/i
-
-/** Quita guiones bajos y lo que va entre corchetes, paréntesis o llaves: «Choujin X [Scan] (2023)» → «Choujin X». */
-const cleanFolderName = (raw) => String(raw || '').replace(/_+/g, ' ').replace(/\[[^\]]*\]|\([^)]*\)|\{[^}]*\}/g, ' ').replace(/\s+/g, ' ').trim()
-
-/** La parte del nombre de un capítulo que nombra a la obra: «Choujin X Cap 12 - Título» → «Choujin X». */
-function workHintFromName(raw) {
-  let s = cleanFolderName(raw)
-  // «Choujin X Extra 2» → «Choujin X»
-  const ex = s.match(EXTRA_RE)
-  if (ex) s = s.slice(0, ex.index)
-  const cap = s.match(CAP_RE)
-  if (cap) s = s.slice(0, cap.index)
-  else if (!ex) {
-    const m = s.match(/^(.*?)(?:\s+|[-–—_]+)\d+(?:[.,]\d+)?(?:\s*[-–—:|].*)?$/)
-    if (m) s = m[1]
-    else if (/^\s*\d/.test(s)) s = ''
-  }
-  s = s.replace(VOL_RE, ' ')
-  return s.replace(/[-–—:|]+\s*$/, '').replace(/\s+/g, ' ').trim()
-}
-
-/** Tomo según la carpeta que contiene al capítulo, si se llama «Vol 2», «Tomo 3», «Volumen 01»… */
-function volumeFromFolder(name) {
-  const m = cleanFolderName(name).match(/^(?:vol(?:umen|ume)?|tomo|v)\s*[.#:-]?\s*(\d+)$/i)
-  return m ? parseInt(m[1], 10) : null
-}
-
-/**
- * Adivina la obra de un capítulo: primero por las carpetas que lo contienen, de la más cercana
- * a la más lejana («Lote/Choujin X/Vol 1/Cap 3» → «Choujin X»), y si no, por su propio nombre
- * («Choujin X Cap 12»). Devuelve { work, sure, score, from } o null.
- */
-function guessWork(ancestors, name) {
-  let best = null
-  const consider = (text, from) => {
-    const m = text ? matchWork(text) : null
-    if (m && (!best || m.score > best.score)) best = { ...m, from }
-    return m?.sure
-  }
-  for (const a of ancestors) {
-    // Tal cual (sin corchetes) y sin números de tomo o capítulo; no se recorta un número
-    // final sin más, porque hay obras como «Kaiju No. 8» o «Mob Psycho 100».
-    const cands = new Set([cleanFolderName(a), workHintFromName(a)])
-    for (const c of cands) if (consider(c, a)) return best
-  }
-  consider(workHintFromName(name), name)
-  return best
 }
 
 /* ---------- Números y tomos por obra ---------- */
@@ -632,7 +409,7 @@ function batchReset() {
   batchValidate()
 }
 
-/* ---------- Ganchos con app.js ---------- */
+/* ---------- Eventos (se suscriben en el init) ---------- */
 
 /** Al cambiar de scan, las obras asignadas ya no sirven: se vuelven a detectar al cargar. */
 function batchOnScanChanged() {
@@ -659,297 +436,6 @@ async function batchOnWorksLoaded() {
   renderBatch()
   batchValidate()
   await offerSkipPublished(orphans)
-}
-
-/* ---------- Capítulos subidos (se guardan por scan) ---------- */
-
-const UPLOADED_MAX = 1000
-const uploadedKey = () => `uploaded:${state.activeScanId}`
-
-function loadUploaded() {
-  if (batch.uploadedScan === state.activeScanId) return
-  batch.uploadedScan = state.activeScanId
-  batch.uploaded = []
-  if (state.activeScanId != null) {
-    try { batch.uploaded = JSON.parse(localStorage.getItem(uploadedKey()) || '[]') } catch { batch.uploaded = [] }
-  }
-  renderUploaded()
-}
-
-function saveUploaded() {
-  if (batch.uploaded.length > UPLOADED_MAX) batch.uploaded.length = UPLOADED_MAX
-  if (state.activeScanId == null) return
-  try { localStorage.setItem(uploadedKey(), JSON.stringify(batch.uploaded)) } catch { /* sin espacio: queda solo en memoria */ }
-}
-
-/**
- * Agrega al inicio; si el mismo capítulo de la misma obra ya estaba en la lista, lo reemplaza.
- * Un «Ya estaba publicado» no reemplaza al registro de cuando lo subió el programa.
- */
-function pushUploaded(entry) {
-  const same = (e) => e.workId === entry.workId && e.number === entry.number && Boolean(e.extra) === Boolean(entry.extra)
-  if (entry.kind === 'existing' && batch.uploaded.some((e) => same(e) && e.kind === 'uploaded')) return
-  batch.uploaded = batch.uploaded.filter((e) => !same(e))
-  batch.uploaded.unshift(entry)
-}
-
-/**
- * kind: 'uploaded' (lo subió el programa; data = respuesta de la API), 'existing' (data = capítulo
- * publicado) o 'trashed' (se mandó a la papelera desde esta lista; trashedFrom guarda el anterior).
- */
-function uploadedEntry(it, data, kind) {
-  const existing = kind === 'existing'
-  return {
-    kind,
-    at: new Date().toISOString(),
-    chapterId: data.id ?? null,
-    workId: it.workId,
-    workTitle: workById(it.workId)?.title || '',
-    number: existing ? shownNumber(data) : it.number,
-    extra: existing ? isExtra(data) : Boolean(it.extra),
-    volume: existing ? data.volumeNumber ?? null : it.volume ?? null,
-    title: (existing ? data.title : it.title) || '',
-    folder: it.name,
-    dir: it.dir,
-    pages: it.files.length,
-    remotePages: existing ? data.pages ?? null : null,
-    state: data.state || null,
-    publishAt: data.publishAt || null,
-    url: data.url || null,
-    thumb: it.files[0]?.url || null,
-  }
-}
-
-function uploadedStatus(e) {
-  if (e.kind === 'trashed') return { cls: 'trashed', text: 'En la papelera' }
-  if (e.kind === 'existing') return { cls: 'existing', text: 'Ya estaba publicado' }
-  if (e.state === 'scheduled' && e.publishAt) return { cls: 'scheduled', text: `Programado · ${formatDate(new Date(e.publishAt))}` }
-  return { cls: 'done', text: 'Publicado' }
-}
-
-function uploadedRow(e) {
-  const st = uploadedStatus(e)
-  const pagesDiffer = e.remotePages != null && e.remotePages !== e.pages
-  return el('li', { class: `uprow${e.kind === 'trashed' ? ' trashed' : ''}` },
-    el('div', { class: 'up-cover' }, e.thumb ? el('img', { src: e.thumb, alt: '', loading: 'lazy', decoding: 'async', onerror: (ev) => ev.target.remove() }) : null),
-    el('div', { class: 'up-body' },
-      el('div', { class: 'up-title' },
-        el('b', { text: chapterLabel(e.number, e.extra) }),
-        e.volume != null ? el('span', { class: 'up-vol', text: `· Vol ${e.volume}` }) : null,
-        e.title ? el('span', { class: 'up-name', text: `— ${e.title}` }) : null,
-        el('span', { class: 'up-work', text: e.workTitle })),
-      el('div', { class: 'ch-meta' },
-        el('span', { class: 'folder', text: `📁 ${e.folder}`, title: e.dir }),
-        el('span', { class: 'sep' }),
-        el('span', { class: pagesDiffer ? 'bad' : '', text: pagesDiffer ? `${e.pages} pág. aquí · ${e.remotePages} en Capibara` : `${e.pages} pág.` }),
-        el('span', { class: 'sep' }),
-        el('span', { text: relativeFromNow(new Date(e.at)), title: formatDate(new Date(e.at)) }))),
-    el('span', { class: `up-status ${st.cls}`, text: st.text }),
-    e.url && e.kind !== 'trashed'
-      ? el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Abrir en Capibara', html: ICON_OPEN, onclick: () => window.capi.system.openExternal(e.url) })
-      : el('span', { class: 'up-noop' }),
-    el('button', {
-      type: 'button', class: 'icon-btn small ghost', html: ICON_MORE, onclick: () => uploadedActions(e),
-      title: e.kind === 'trashed' ? 'Restaurar o volver a subir' : 'Cambiar número, publicar ya o mandar a la papelera',
-    }))
-}
-
-function renderUploaded() {
-  const card = $('#uploadedCard')
-  const n = batch.uploaded.length
-  card.hidden = !n
-  $('#uploadedCount').textContent = formatNumber(n)
-  const existing = batch.uploaded.filter((e) => e.kind === 'existing').length
-  const trashed = batch.uploaded.filter((e) => e.kind === 'trashed').length
-  const parts = [
-    n - existing - trashed ? plural(n - existing - trashed, 'subido con el programa', 'subidos con el programa') : '',
-    existing ? plural(existing, 'omitido porque ya estaba publicado', 'omitidos porque ya estaban publicados') : '',
-    trashed ? plural(trashed, 'en la papelera', 'en la papelera') : '',
-  ].filter(Boolean)
-  $('#uploadedSummary').textContent = `${existing || trashed ? `${parts.join(' · ')}. ` : 'Salen de la cola al terminar de subirse. '}Se guardan aunque cierres el programa.`
-  card.classList.toggle('collapsed', !batch.uploadedOpen)
-  $('#uploadedToggle span').textContent = batch.uploadedOpen ? 'Ocultar' : 'Mostrar'
-  const list = $('#uploadedList')
-  list.innerHTML = ''
-  list.hidden = !batch.uploadedOpen
-  if (batch.uploadedOpen) batch.uploaded.forEach((e) => list.append(uploadedRow(e)))
-}
-
-function initUploaded() {
-  $('#uploadedToggle').addEventListener('click', () => {
-    batch.uploadedOpen = !batch.uploadedOpen
-    localStorage.setItem('uploadedOpen', batch.uploadedOpen ? '1' : '0')
-    renderUploaded()
-  })
-  $('#uploadedClear').addEventListener('click', async () => {
-    const choice = await ask({
-      kind: 'warn',
-      title: '¿Vaciar la lista de subidos?',
-      text: 'Solo se borra esta lista del programa. Los capítulos siguen en Capibara.',
-      buttons: [{ value: 'no', label: 'Cancelar', cancel: true }, { value: 'yes', label: 'Vaciar', kind: 'danger-solid' }],
-    })
-    if (choice !== 'yes') return
-    batch.uploaded = []
-    saveUploaded()
-    renderUploaded()
-  })
-  loadUploaded()
-}
-
-/* ---------- Arreglar un capítulo de la lista de subidos ---------- */
-
-const ICON_MORE = '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>'
-
-/** El id del capítulo en Capibara; las entradas de la 1.3.1 no lo guardaban y se busca por número. */
-async function uploadedChapterId(e) {
-  if (e.chapterId) return e.chapterId
-  const list = await ensureChapters(e.workId)
-  const found = list?.find((c) => isExtra(c) === Boolean(e.extra) && shownNumber(c) === Number(e.number))
-  if (found) e.chapterId = found.id
-  return found?.id || null
-}
-
-/** Tras un cambio en Capibara: se guarda la lista y se vuelven a leer los capítulos de la obra. */
-function afterUploadedChange(e) {
-  saveUploaded()
-  renderUploaded()
-  ensureChapters(e.workId, { force: true }).then(() => { renderBatch(); batchValidate() })
-  if (state.selectedWork?.id === e.workId) loadChapters()
-}
-
-async function uploadedActions(e) {
-  if (state.uploading) return toast('info', 'Espera a que termine la subida', 'Después podrás arreglar este capítulo.')
-  if (!canWrite(state.me?.key)) return toast('warn', 'No se puede cambiar', 'Esta API key no tiene el permiso chapters:write.')
-  const name = `${chapterLabel(e.number, e.extra)} de «${e.workTitle || 'la obra'}»`
-
-  if (e.kind === 'trashed') {
-    const choice = await ask({
-      kind: 'info',
-      title: `${name} está en la papelera`,
-      text: 'Se puede restaurar durante 30 días desde que se mandó a la papelera. Si quieres subir otra versión, vuelve a poner su carpeta en la cola.',
-      buttons: [
-        { value: 'close', label: 'Cerrar', cancel: true },
-        ...(e.dir ? [{ value: 'requeue', label: 'Poner su carpeta en la cola' }] : []),
-        { value: 'restore', label: 'Restaurar', kind: 'primary' },
-      ],
-    })
-    if (choice === 'restore') return restoreUploaded(e)
-    if (choice === 'requeue') return requeueUploaded(e)
-    return
-  }
-
-  const id = await uploadedChapterId(e)
-  if (!id) return toast('error', 'No se encontró el capítulo', `${name} ya no está en Capibara (¿lo borraron desde el panel?).`)
-  const scheduled = e.state === 'scheduled'
-  const pagesDiffer = e.remotePages != null && e.remotePages !== e.pages
-  const choice = await ask({
-    kind: 'info',
-    title: name,
-    text: [
-      e.kind === 'existing' ? 'Ya estaba publicado en Capibara cuando agregaste su carpeta.' : `Lo subió el programa ${relativeFromNow(new Date(e.at))}.`,
-      pagesDiffer ? `Ojo: la carpeta tiene ${e.pages} páginas y el de Capibara ${e.remotePages}.` : '',
-      'Los cambios no avisan a nadie.',
-    ].filter(Boolean).join(' '),
-    buttons: [
-      { value: 'close', label: 'Cerrar', cancel: true },
-      { value: 'trash', label: 'Mandar a la papelera', kind: 'ghost danger' },
-      ...(scheduled ? [{ value: 'publish', label: 'Publicar ya' }] : []),
-      { value: 'number', label: 'Cambiar número', kind: 'primary' },
-    ],
-  })
-  if (choice === 'number') return renumberUploaded(e, id)
-  if (choice === 'publish') return publishUploaded(e, id)
-  if (choice === 'trash') return trashUploaded(e, id)
-}
-
-async function renumberUploaded(e, id) {
-  const r = await ask({
-    kind: 'info',
-    title: `Cambiar el número ${e.extra ? 'del extra' : 'del cap'} ${e.number}`,
-    text: `«${e.workTitle}». Si ${e.extra ? 'ese extra' : 'ese número'} ya existe en la obra, Capibara no deja cambiarlo.`,
-    input: { label: 'Número nuevo', value: String(e.number), type: 'number' },
-    buttons: [{ value: 'no', label: 'Cancelar', cancel: true }, { value: 'yes', label: 'Cambiar', kind: 'primary' }],
-  })
-  if (r.value !== 'yes') return
-  const n = Number(String(r.input).replace(',', '.'))
-  if (r.input === '' || !Number.isFinite(n) || n < 0) return toast('warn', 'Número no válido', 'Escribe un número, por ejemplo 12 o 12.5.')
-  if (n === Number(e.number)) return
-  const res = await window.capi.chapter.setNumber(id, n)
-  if (!res.ok) return handleApiError(res.error, `No se pudo cambiar ${e.extra ? 'el extra' : 'el cap'} ${e.number}`)
-  const old = e.number
-  // Otra entrada de la lista con ese número en la obra era de un capítulo que ya no lo tiene.
-  batch.uploaded = batch.uploaded.filter((x) => x === e || !(x.workId === e.workId && Boolean(x.extra) === Boolean(e.extra) && Number(x.number) === n && x.kind !== 'trashed'))
-  e.number = n
-  if (res.data?.url) e.url = res.data.url
-  toast('success', `${chapterLabel(old, e.extra)} → ${chapterLabel(n, e.extra).toLowerCase()}`, `«${e.workTitle}»`)
-  afterUploadedChange(e)
-}
-
-async function publishUploaded(e, id) {
-  const choice = await ask({
-    kind: 'info',
-    title: `¿Publicar ya ${e.extra ? 'el extra' : 'el cap'} ${e.number}?`,
-    text: `«${e.workTitle}» estaba programado${e.publishAt ? ` para el ${formatDate(new Date(e.publishAt))}` : ''}.`,
-    buttons: [
-      { value: 'no', label: 'Cancelar', cancel: true },
-      { value: 'quiet', label: 'Publicar sin avisos' },
-      { value: 'notify', label: 'Publicar y avisar', kind: 'primary' },
-    ],
-  })
-  if (choice !== 'quiet' && choice !== 'notify') return
-  const res = await window.capi.chapter.publish(id, { notify: choice === 'notify' })
-  if (!res.ok) return handleApiError(res.error, `No se pudo publicar ${chapterLabel(e.number, e.extra).toLowerCase()}`)
-  e.state = 'published'
-  e.publishAt = null
-  toast('success', `${chapterLabel(e.number, e.extra)} publicado`, choice === 'notify' ? 'Salieron los avisos de siempre.' : 'Sin avisos.')
-  afterUploadedChange(e)
-}
-
-async function trashUploaded(e, id) {
-  const choice = await ask({
-    kind: 'warn',
-    title: `¿Mandar ${e.extra ? 'el extra' : 'el cap'} ${e.number} a la papelera?`,
-    text: `«${e.workTitle}». Deja de verse en Capibara y su número queda libre. Se puede restaurar durante 30 días, aquí o desde el panel.`,
-    buttons: [{ value: 'no', label: 'Cancelar', cancel: true, focus: true }, { value: 'yes', label: 'Mandar a la papelera', kind: 'danger-solid' }],
-  })
-  if (choice !== 'yes') return
-  const res = await window.capi.chapter.trash(id)
-  if (!res.ok) return handleApiError(res.error, `No se pudo borrar ${chapterLabel(e.number, e.extra).toLowerCase()}`)
-  e.trashedFrom = e.kind
-  e.kind = 'trashed'
-  e.trashedAt = new Date().toISOString()
-  toast('success', `${chapterLabel(e.number, e.extra)} en la papelera`, 'Puedes restaurarlo o volver a poner su carpeta en la cola desde esta lista.')
-  afterUploadedChange(e)
-}
-
-async function restoreUploaded(e) {
-  const id = e.chapterId
-  if (!id) return toast('error', 'No se puede restaurar desde aquí', 'Restáuralo desde la papelera del panel.')
-  const res = await window.capi.chapter.restore(id)
-  if (!res.ok) return handleApiError(res.error, `No se pudo restaurar ${chapterLabel(e.number, e.extra).toLowerCase()}`)
-  e.kind = e.trashedFrom || 'uploaded'
-  delete e.trashedFrom
-  delete e.trashedAt
-  toast('success', `${chapterLabel(e.number, e.extra)} restaurado`, `«${e.workTitle}»`)
-  afterUploadedChange(e)
-}
-
-/** Vuelve a poner la carpeta en la cola, con su obra; la entrada sale de la lista de subidos. */
-async function requeueUploaded(e) {
-  const res = await window.capi.files.resolveChapters([e.dir])
-  if (!res.ok) return toast('error', 'No se pudo leer la carpeta', res.error.message)
-  if (!res.data.chapters.length) return toast('warn', 'La carpeta ya no tiene páginas', e.dir)
-  batch.uploaded = batch.uploaded.filter((x) => x !== e)
-  saveUploaded()
-  renderUploaded()
-  await addChapters(res.data, { workId: e.workId })
-}
-
-/** La obra elegida arriba es la predeterminada para lo que no tenga obra. */
-async function batchOnWorkSelected(work) {
-  if (!work) return
-  const orphans = pendingItems().filter((i) => i.workId == null)
-  if (orphans.length) await assignWork(orphans, work)
 }
 
 /* ---------- Grupos por obra ---------- */
@@ -1049,7 +535,9 @@ function batchValidate() {
       else if (it.number == null || Number.isNaN(it.number)) err = it.extra ? 'Falta el número del extra.' : 'Falta el número del capítulo.'
       else if (it.number < 0) err = 'El número no puede ser negativo.'
       else if (it.number >= EXTRA_BASE) { err = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`; always = true }
-      else if (existingFor(it.workId, Boolean(it.extra)).has(it.number)) { err = `${it.extra ? 'El extra' : 'El capítulo'} ${it.number} ya existe en «${work.title}».`; always = true }
+      else if (it.extra && !hasCap('extras')) { err = `${plat().label} no tiene extras: márcalo como capítulo o quítalo de la lista.`; always = true }
+      // Si ya quedó en la plataforma activa y solo falta en otra, no cuenta como repetido.
+      else if (!it.doneOn?.has(state.platform) && existingFor(it.workId, Boolean(it.extra)).has(it.number)) { err = `${it.extra ? 'El extra' : 'El capítulo'} ${it.number} ya existe en «${work.title}».`; always = true }
       else if (counts.get(itemSlot(it)) > 1) { err = `${it.extra ? 'El extra' : 'El número'} ${it.number} está repetido en «${work.title}».`; always = true }
       else if (it.volume != null && (!Number.isInteger(it.volume) || it.volume < 0)) { err = 'El tomo debe ser un número entero.'; always = true }
       else if (it.files.length > MAX_PAGES) { err = `Tiene ${it.files.length} páginas (máximo ${MAX_PAGES}).`; always = true }
@@ -1084,9 +572,9 @@ function batchValidate() {
     errors.publish ? 'error' : publishMsg ? 'ok' : '')
   $('#publishAt').classList.toggle('invalid', Boolean(errors.publish) && (show || Boolean(plan.base)))
 
-  const p = typeof activeProfile === 'function' ? activeProfile() : null
-  if ((state.me && !state.me.key.scopes.includes('chapters:write')) || (p && !canWrite(p))) errors.scope = 'La clave de este scan no tiene el permiso chapters:write.'
-  if (!state.hasKey) errors.key = 'Agrega un scan.'
+  const p = activeProfile()
+  if (isCapibara() && ((state.me && !state.me.key.scopes.includes('chapters:write')) || (p && !canWrite(p)))) errors.scope = 'La clave de este scan no tiene el permiso chapters:write.'
+  if (!state.hasKey) errors.key = isCapibara() ? 'Agrega un scan.' : `Inicia sesión en ${plat().full}.`
   $('#workTrigger').classList.remove('invalid')
 
   renderBatchSummary(plan, errors)
@@ -1129,7 +617,7 @@ function renderBatchSummary(plan, errors) {
     : 'Se publican conforme terminan de subirse'
   if (!plan.notify) t += ' · Sin avisos'
   const lim = hourLimits()
-  if (queue.length > lim.chapters || pages > lim.images) {
+  if (isCapibara() && (queue.length > lim.chapters || pages > lim.images)) {
     t += ` · Supera el límite por hora del scan (${formatNumber(lim.chapters)} capítulos / ${formatNumber(lim.images)} imágenes): la subida se pausará sola hasta que se libere`
   }
   sub.textContent = t
@@ -1167,7 +655,7 @@ function updateRowStatus(it) {
   it.refs.row.dataset.status = it.status
   it.refs.status.className = `ch-status ${s.cls}${it.status === 'done' && it.result?.url ? ' link' : ''}`
   it.refs.status.textContent = s.text
-  it.refs.status.title = it.status === 'done' && it.result?.url ? 'Abrir en Capibara' : it.status === 'error' ? it.error : ''
+  it.refs.status.title = it.status === 'done' && it.result?.url ? `Abrir en ${plat().label}` : it.status === 'error' ? it.error : ''
   it.refs.progress.style.width = `${it.status === 'done' ? 100 : Math.round((it.progress || 0) * 100)}%`
   if (it.status === 'error') it.refs.error.textContent = it.error
 }
@@ -1203,7 +691,7 @@ function chapterRow(it) {
     type: 'button', class: Boolean(it.extra) === extra ? 'on' : '', disabled: locked, title: hint,
     'aria-pressed': String(Boolean(it.extra) === extra), onclick: () => setItemExtra(it, extra),
   }, label)
-  const kind = el('div', { class: `ch-kind${it.extra ? ' extra' : ''}`, role: 'group', 'aria-label': 'Tipo' },
+  const kind = el('div', { class: `ch-kind${it.extra ? ' extra' : ''}`, role: 'group', 'aria-label': 'Tipo', 'data-cap': 'extras' },
     kindBtn(false, 'Capítulo', 'Capítulo normal: lleva el número de capítulo de la obra.'),
     kindBtn(true, 'Extra', 'Extra: arte, ilustración o contenido fuera de capítulos. Se muestra como «Extra N» y no cuenta como capítulo.'))
 
@@ -1217,7 +705,7 @@ function chapterRow(it) {
       el('div', { class: 'ch-fields' },
         kind,
         el('label', { class: `ch-field${it.extra ? ' extra' : ''}` }, el('span', { class: 'pre', text: it.extra ? 'Extra' : 'Cap' }), num),
-        el('label', { class: 'ch-field' }, el('span', { class: 'pre', text: 'Vol' }), vol),
+        el('label', { class: 'ch-field', 'data-cap': 'volume' }, el('span', { class: 'pre', text: 'Vol' }), vol),
         title),
       el('div', { class: 'ch-meta' },
         el('span', { class: 'folder', text: `📁 ${it.name}`, title: it.dir }),
@@ -1233,7 +721,7 @@ function chapterRow(it) {
     el('div', { class: 'ch-side' },
       el('div', { class: 'ch-side-top' },
         status,
-        el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Quitar este capítulo de la lista (no borra nada de tu carpeta ni de Capibara)', html: ICONS.x, disabled: state.uploading, onclick: () => removeChapter(it.id) })),
+        el('button', { type: 'button', class: 'icon-btn small ghost', title: 'Quitar este capítulo de la lista (no borra nada de tu carpeta ni de la plataforma)', html: ICONS.x, disabled: state.uploading, onclick: () => removeChapter(it.id) })),
       el('div', { class: 'ch-actions' },
         el('button', {
           type: 'button', class: 'btn secondary small', disabled: locked, onclick: (e) => openWorkPicker(e.currentTarget, [it]),
@@ -1316,93 +804,6 @@ function renderBatch() {
     list.append(el('li', { class: 'add-row', onclick: pickChapters, html: `${ICONS.plus}<span>Agregar más carpetas</span>` }))
   }
   list.scrollTop = scroll
-}
-
-/* ---------- Selector flotante de obra ---------- */
-
-let pickerTargets = []
-let pickerIndex = 0
-let pickerOnPick = null // otro uso del selector (p. ej. «Importar de web»)
-
-function pickerWorks() {
-  const q = normTitle($('#workPickerSearch').value)
-  return state.works.filter((w) => !q || normTitle(`${w.title} ${w.alternativeTitle || ''} ${w.slug}`).includes(q))
-}
-
-function renderWorkPicker() {
-  const list = $('#workPickerList')
-  list.innerHTML = ''
-  const works = pickerWorks()
-  pickerIndex = Math.min(pickerIndex, Math.max(0, works.length - 1))
-  const current = new Set(pickerTargets.map((i) => i.workId))
-  if (!works.length) {
-    list.append(el('li', { class: 'empty', text: state.works.length ? 'No hay obras que coincidan.' : 'Cargando obras…' }))
-    return
-  }
-  works.forEach((w, i) => {
-    list.append(el('li', {
-      role: 'option',
-      'aria-selected': String(current.size === 1 && current.has(w.id)),
-      class: i === pickerIndex ? 'active' : '',
-      onmousemove: () => { if (pickerIndex !== i) { pickerIndex = i; $$('#workPickerList li').forEach((li, j) => li.classList.toggle('active', j === i)) } },
-      onclick: () => choosePickerWork(w),
-    }, coverImg(w), el('div', { class: 'work-text' },
-      el('span', { class: 'work-title', text: w.title, title: w.title }), workMeta(w))))
-  })
-}
-
-function openWorkPicker(anchor, items, onPick = null) {
-  if (state.uploading && !onPick) return
-  pickerTargets = items
-  pickerOnPick = onPick
-  pickerIndex = 0
-  const pop = $('#workPicker')
-  $('#workPickerSearch').value = ''
-  renderWorkPicker()
-  pop.hidden = false
-  // Se abre junto al botón, sin salirse de la ventana.
-  const r = anchor.getBoundingClientRect()
-  const w = pop.offsetWidth
-  const h = pop.offsetHeight
-  const left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8)
-  const below = r.bottom + 6 + h < window.innerHeight - 8
-  pop.style.left = `${left}px`
-  pop.style.top = `${below ? r.bottom + 6 : Math.max(8, r.top - h - 6)}px`
-  $('#workPickerSearch').focus()
-}
-
-function closeWorkPicker() {
-  $('#workPicker').hidden = true
-  pickerTargets = []
-  pickerOnPick = null
-}
-
-async function choosePickerWork(work) {
-  const items = pickerTargets
-  const onPick = pickerOnPick
-  closeWorkPicker()
-  if (onPick) return onPick(work)
-  const moved = items.filter((i) => i.status !== 'done' && i.workId !== work.id).length
-  await assignWork(items, work)
-  if (moved) toast('success', `${plural(moved, 'capítulo', 'capítulos')} en «${work.title}»`)
-}
-
-function initWorkPicker() {
-  $('#workPickerSearch').addEventListener('input', () => { pickerIndex = 0; renderWorkPicker() })
-  $('#workPickerSearch').addEventListener('keydown', (e) => {
-    const works = pickerWorks()
-    if (e.key === 'ArrowDown') { e.preventDefault(); pickerIndex = Math.min(works.length - 1, pickerIndex + 1); renderWorkPicker() }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); pickerIndex = Math.max(0, pickerIndex - 1); renderWorkPicker() }
-    else if (e.key === 'Enter') { e.preventDefault(); if (works[pickerIndex]) choosePickerWork(works[pickerIndex]) }
-    else if (e.key === 'Escape') { e.stopPropagation(); closeWorkPicker() }
-    else return
-    $$('#workPickerList li')[pickerIndex]?.scrollIntoView({ block: 'nearest' })
-  })
-  document.addEventListener('mousedown', (e) => {
-    if (!$('#workPicker').hidden && !$('#workPicker').contains(e.target)) closeWorkPicker()
-  })
-  window.addEventListener('resize', closeWorkPicker)
-  $('#batchList').addEventListener('scroll', closeWorkPicker, { passive: true })
 }
 
 /* ---------- Modal de páginas ---------- */
@@ -1601,229 +1002,6 @@ function initBatchDrop() {
   $('#batchClearBtn').addEventListener('click', batchReset)
 }
 
-/* ---------- Subida en cola ---------- */
-
-async function batchStart() {
-  state.attempted = true
-  const v = batchValidate()
-  if (!v.ok) {
-    if (v.errors.key) return openKeyModal(true)
-    const first = Object.keys(v.errors)[0]
-    toast('warn', 'Revisa el formulario', v.errors[first])
-    if (first === 'rows') $('.chrow.invalid')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    else if (first === 'publish') $('#publishAt').focus()
-    return
-  }
-
-  const { plan, queue } = v
-  if (!(await confirmNumbering(queue))) return
-  const scanName = activeProfile()?.name || 'tu scan'
-  const workIds = [...new Set(queue.map((i) => i.workId))]
-  for (const it of queue) { it.status = 'pending'; it.error = ''; it.progress = 0; it.ratePauses = 0 }
-  batch.cancelled = false
-  setUploadingUI(true)
-  renderBatch()
-  setProgress(0, 'Preparando…')
-  $('#summaryMain').textContent = workIds.length === 1
-    ? `Subiendo ${plural(queue.length, 'capítulo', 'capítulos')} de «${workById(workIds[0]).title}»`
-    : `Subiendo ${plural(queue.length, 'capítulo', 'capítulos')} de ${workIds.length} obras a ${scanName}`
-  $('#summarySub').className = 'summary-sub'
-
-  const totalBytes = queue.reduce((s, it) => s + sumSize(it.files), 0) || 1
-  let bytesBefore = 0
-  let current = null
-  let pos = 0
-  const label = () => `${pos + 1}/${queue.length} · ${workById(current.workId)?.title || ''} ${current.extra ? `Extra ${current.number}` : `#${current.number}`}`
-
-  const unsubscribe = window.capi.upload.onProgress((p) => {
-    if (!current) return
-    if (p.phase === 'upload') {
-      current.progress = p.doneBytes / p.totalBytes
-      updateRowStatus(current)
-      setProgress(((bytesBefore + p.doneBytes) / totalBytes) * 100, `${label()} · páginas ${p.done}/${p.total}`)
-    } else if (p.phase === 'create') {
-      $('#progressText').textContent = `${label()} · creando capítulo…`
-    } else if (p.phase === 'verify') {
-      $('#progressText').textContent = `${label()} · verificando páginas simples…`
-    } else if (p.phase === 'sign') {
-      $('#progressText').textContent = `${label()} · preparando subida…`
-    }
-  })
-
-  const perWork = new Map() // workId → { ok, failed }
-  let ok = 0
-  let failed = 0
-  let stopped = false
-  for (pos = 0; pos < queue.length; pos++) {
-    if (batch.cancelled) { stopped = true; break }
-    const it = queue[pos]
-    const work = workById(it.workId)
-    current = it
-    it.status = 'uploading'
-    updateRowStatus(it)
-    it.refs?.row.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    $('#summarySub').textContent = `${ok} subidos${failed ? ` · ${failed} con error` : ''} · quedan ${queue.length - pos}`
-
-    const sched = plan.map.get(it.id) || {}
-    const res = await window.capi.upload.start({
-      workId: work.id,
-      files: it.files.map((f) => ({ path: f.path, single: Boolean(f.single) })),
-      chapter: {
-        number: it.number,
-        title: it.title || null,
-        volumeNumber: it.volume,
-        publishAt: sched.publishAt ? sched.publishAt.toISOString() : null,
-        notify: plan.notify,
-        announcePage: announcePageFor(it.files),
-        extra: Boolean(it.extra),
-      },
-    })
-    bytesBefore += sumSize(it.files)
-    const tally = perWork.get(it.workId) || { ok: 0, failed: 0 }
-    perWork.set(it.workId, tally)
-
-    if (res.ok) {
-      it.status = 'done'
-      it.result = res.data
-      it.progress = 1
-      ok++
-      tally.ok++
-      warnSingles(res.data.singleCheck, itemLabel(it))
-      const cache = state.chaptersByWork.get(it.workId)
-      const entry = { id: res.data.id, number: res.data.number ?? it.number, extra: Boolean(it.extra), extraNumber: it.extra ? it.number : null, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url }
-      if (cache) cache.push(entry)
-      if (state.selectedWork?.id === it.workId && state.chapters !== cache) state.chapters.push(entry)
-      // Sale de la cola y pasa a «Capítulos subidos».
-      pushUploaded(uploadedEntry(it, res.data, 'uploaded'))
-      saveUploaded()
-      batch.items = batch.items.filter((i) => i !== it)
-      renderBatch()
-      renderUploaded()
-    } else if (res.error.code === 'cancelled') {
-      it.status = 'pending'
-      it.progress = 0
-      stopped = true
-    } else if (res.error.code === 'api.rate_limited' && res.error.retryAfter && it.ratePauses < MAX_RATE_PAUSES) {
-      // Un límite por hora: se espera lo que dice Capibara y se reintenta este mismo capítulo
-      // (las páginas ya subidas se reutilizan).
-      it.ratePauses++
-      it.status = 'pending'
-      it.progress = 0
-      updateRowStatus(it)
-      bytesBefore -= sumSize(it.files)
-      if (await waitRateLimit(res.error)) { pos--; continue }
-      stopped = true
-    } else {
-      it.status = 'error'
-      it.error = withTrace(res.error)
-      failed++
-      tally.failed++
-      if (res.error.code === 'api.key_invalid' || res.error.code === 'api.key_missing') {
-        handleApiError(res.error, 'API key no válida')
-        stopped = true
-      }
-    }
-    updateRowStatus(it)
-    if (stopped) break
-  }
-
-  unsubscribe()
-  current = null
-  setUploadingUI(false)
-  state.attempted = false
-  renderBatch()
-  batchValidate()
-  // Refresca los capítulos reales de cada obra tocada.
-  Promise.all(workIds.map((id) => ensureChapters(id, { force: true }))).then(() => { renderBatch(); batchValidate() })
-  loadChapters()
-
-  const pending = queue.filter((i) => i.status === 'pending').length
-  if (!ok && !failed) {
-    toast('info', 'Subida cancelada', 'Las páginas ya subidas se reutilizarán si vuelves a intentarlo pronto.')
-    return
-  }
-  showBatchDone(plan, perWork, { ok, failed, pending })
-}
-
-/** Espera a que Capibara libere el límite, con cuenta atrás en la barra. false si se canceló. */
-async function waitRateLimit(error) {
-  const until = Date.now() + (error.retryAfter + 3) * 1000
-  const at = new Date(until).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-  toast('warn', 'Subida en pausa', `${error.message} Sigue sola a las ${at}; puedes dejar el programa abierto.`, 12000)
-  while (Date.now() < until) {
-    if (batch.cancelled) return false
-    const left = Math.ceil((until - Date.now()) / 1000)
-    $('#progressText').textContent = `En pausa por un límite de Capibara · sigue a las ${at} (falta ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')})`
-    await new Promise((r) => setTimeout(r, 1000))
-  }
-  return !batch.cancelled
-}
-
-/**
- * Antes de subir: si algún capítulo va con un número distinto al de su carpeta, o con uno
- * asignado solo porque la carpeta no lo trae, se muestra el resumen y se pide confirmación.
- */
-async function confirmNumbering(queue) {
-  const odd = queue.filter((i) => i.parsedNumber != null && (i.number !== i.parsedNumber || Boolean(i.parsedExtra) !== Boolean(i.extra)))
-  const auto = queue.filter((i) => i.parsedNumber == null && i.numberSource === 'auto')
-  if (!odd.length && !auto.length) return true
-  const MAX = 8
-  const lines = [
-    ...odd.map((i) => `«${i.name}» → ${itemLabel(i).toLowerCase()} (la carpeta dice ${chapterLabel(i.parsedNumber, i.parsedExtra).toLowerCase()})`),
-    ...auto.map((i) => `«${i.name}» → ${itemLabel(i).toLowerCase()} (la carpeta no trae número)`),
-  ]
-  const choice = await ask({
-    kind: 'warn',
-    title: 'Revisa la numeración antes de subir',
-    text: [
-      odd.length ? `${plural(odd.length, 'capítulo se subirá', 'capítulos se subirán')} con un número distinto al de su carpeta.` : '',
-      auto.length ? `${plural(auto.length, 'capítulo no trae', 'capítulos no traen')} número en el nombre y se numeró solo.` : '',
-    ].filter(Boolean).join(' '),
-    list: lines.slice(0, MAX),
-    more: lines.length - MAX,
-    buttons: [
-      { value: 'review', label: 'Revisar', cancel: true, focus: true },
-      { value: 'go', label: 'Subir así', kind: 'primary' },
-    ],
-  })
-  if (choice === 'go') return true
-  const first = odd[0] || auto[0]
-  first.refs?.row.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  first.refs?.num.focus()
-  return false
-}
-
-function showBatchDone(plan, perWork, { ok, failed, pending }) {
-  const mark = $('#doneModal .success-mark')
-  const clean = !failed && !pending
-  mark.classList.toggle('warn', !clean)
-  mark.innerHTML = clean ? ICONS.check : ICONS.warn
-  $('#doneTitle').textContent = clean
-    ? `¡${ok} capítulo${ok === 1 ? '' : 's'} ${plan.schedule ? 'programado' : 'subido'}${ok === 1 ? '' : 's'}!`
-    : ok ? 'Subida terminada con pendientes' : 'No se pudo subir ningún capítulo'
-  const lines = []
-  for (const [workId, t] of perWork) {
-    lines.push(`«${workById(workId)?.title || 'Obra'}»: ${t.ok} subido${t.ok === 1 ? '' : 's'}${t.failed ? ` · ${t.failed} con error` : ''}`)
-  }
-  const parts = [`${ok} subido${ok === 1 ? '' : 's'}`]
-  if (failed) parts.push(`${failed} con error`)
-  if (pending) parts.push(`${pending} sin subir`)
-  lines.push(parts.join(' · '))
-  if (plan.schedule && plan.base) lines.push(`Programados desde el ${formatDate(plan.base)}${plan.step ? `, uno ${every(plan.intervalVal, plan.unit)} por obra` : ''}`)
-  if (failed || pending) lines.push('Corrige lo marcado en la lista y pulsa «Subir capítulos» para seguir solo con esos.')
-  const text = $('#doneText')
-  text.innerHTML = ''
-  lines.forEach((l, i) => { if (i) text.append(el('br')); text.append(l) })
-  const works = [...perWork.keys()]
-  const single = works.length === 1 ? workById(works[0]) : null
-  const url = single?.url || activeProfile()?.url || null
-  state.lastResult = { url }
-  $('#doneOpen').textContent = single ? 'Ver obra en Capibara' : 'Ver scan en Capibara'
-  $('#doneOpen').hidden = !url
-  $('#doneNext').textContent = 'Listo'
-  $('#doneModal').hidden = false
-}
-
 /* ---------- Modo ---------- */
 
 function setMode(mode) {
@@ -1837,7 +1015,39 @@ function setMode(mode) {
   validate()
 }
 
+/* ---------- Capítulos que llegan de «Importar de web» (su propia ventana) ---------- */
+
+/** Agrega los capítulos importados con su obra y, si se pidió, la publicación escalonada. */
+async function batchReceiveImport({ dirs, workId, interval, unit }) {
+  const res = await window.capi.files.resolveChapters(dirs)
+  if (!res.ok) return toast('error', 'No se pudieron preparar los capítulos importados', res.error.message)
+  setView('upload')
+  setMode('batch')
+  if (interval > 0) {
+    $('#scheduleToggle').checked = true
+    // El primero sale en 15 minutos; los demás, uno cada intervalo.
+    const first = new Date(Date.now() + 15 * 60e3)
+    first.setSeconds(0, 0)
+    first.setMinutes(Math.ceil(first.getMinutes() / 5) * 5)
+    $('#publishAt').value = toLocalInput(first)
+    $('#batchInterval').value = String(interval)
+    $('#batchIntervalUnit').value = unit
+    $('#scheduleBox').hidden = false
+  }
+  await addChapters(res.data, { workId })
+  validate()
+  toast('success', `${plural(res.data.chapters.length, 'capítulo importado', 'capítulos importados')}`,
+    interval > 0
+      ? `Programados uno ${every(interval, unit)} desde ${formatDate(new Date($('#publishAt').value))}. Revisa la lista y pulsa «Subir capítulos».`
+      : 'Revisa la lista y pulsa «Subir capítulos».', 10000)
+}
+
 function initBatch() {
+  window.capi.import.onHandoff(batchReceiveImport)
+  for (const id of ['#batchImportBtn', '#batchImportEmpty']) $(id).addEventListener('click', (e) => { e.stopPropagation(); window.capi.import.openWindow() })
+  on('scanChanged', batchOnScanChanged)
+  on('worksLoaded', batchOnWorksLoaded)
+  on('workSelected', batchOnWorkSelected)
   initBatchDrop()
   initPagesModal()
   initWorkPicker()
@@ -1872,12 +1082,10 @@ function initBatch() {
     const mark = $('#doneModal .success-mark')
     mark.classList.remove('warn')
     mark.innerHTML = ICONS.check
-    $('#doneOpen').textContent = 'Ver en Capibara'
+    $('#doneOpen').textContent = `Ver en ${plat().label}`
     $('#doneNext').textContent = 'Subir otro capítulo'
   })
 
   renderBatch()
   setMode(localStorage.getItem('mode') || 'single')
 }
-
-initBatch()

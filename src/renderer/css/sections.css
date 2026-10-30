@@ -1,0 +1,77 @@
+/* =========================================================
+   Secciones (Subir / Importar / Descargar)
+   ========================================================= */
+.view-tabs {
+  display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border); -webkit-app-region: no-drag;
+}
+.view-tabs button {
+  height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2);
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font: 800 12px var(--font); text-transform: uppercase; letter-spacing: .06em;
+}
+.view-tabs button svg { width: 15px; height: 15px; }
+.view-tabs button:hover { color: var(--text); }
+.view-tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+.view-tabs .busy-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
+
+/* Descargar */
+.dl-works-card { display: flex; flex-direction: column; flex: 1 0 320px; min-height: 320px; overflow: hidden; }
+.dl-search { border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-2); padding: 4px 12px; }
+.dl-work-list { flex: 1; min-height: 0; max-height: none; margin-top: 8px; padding: 0; overflow-y: auto; }
+.dl-dest { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); margin-bottom: 8px; }
+.dl-dest-path { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.dl-range { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.dl-range input { width: 64px; height: 30px; padding: 0 8px; border-radius: 8px; font-size: 12.5px; }
+.dl-body { flex: 1; min-height: 0; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); overflow: hidden; }
+.dl-list { list-style: none; margin: 0; padding: 8px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.dl-row {
+  flex: none; position: relative; display: grid; grid-template-columns: 22px 92px 1fr auto auto; align-items: center; gap: 12px;
+  padding: 8px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; overflow: hidden;
+}
+.dl-row:hover { border-color: var(--border-strong); }
+.dl-row.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.dl-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.dl-num { font-weight: 800; white-space: nowrap; }
+.dl-num small { font-weight: 600; color: var(--text-3); margin-left: 4px; }
+.dl-title { min-width: 0; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
+.dl-meta { font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
+.dl-row .ch-status.skipped { background: var(--surface-3); color: var(--text-2); }
+.dl-row[data-status="downloading"] { border-color: var(--accent); }
+.dl-row[data-status="error"] { border-color: var(--danger); }
+.dl-row[data-status="done"], .dl-row[data-status="skipped"] { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+
+/* Importar de web */
+.im-site { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.im-site-icon { width: 32px; height: 32px; border-radius: 8px; flex: none; object-fit: cover; background: var(--surface-3); }
+#imCatalog { margin-top: 10px; }
+.im-work { display: flex; align-items: center; gap: 12px; }
+.im-work .work-text { flex: 1; }
+.im-work .badge { align-self: flex-start; margin-top: 2px; }
+.im-warn { display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--warning-soft); border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.im-warn > span svg { width: 20px; height: 20px; color: var(--warning); }
+.im-warn strong { display: block; font-size: 13px; }
+.im-warn p { margin: 4px 0 10px; font-size: 12.5px; color: var(--text-2); }
+.im-warn-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.im-confirm { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); cursor: pointer; font-size: 12.5px; }
+.im-confirm input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
+.im-lang { height: 30px; border-radius: 8px; font-size: 12.5px; padding: 0 28px 0 10px; margin-right: 6px; }
+#imInterval { flex: 0 0 80px; }
+.im-row { grid-template-columns: 22px 104px 1fr auto auto; }
+.im-row.invalid { border-color: var(--danger); }
+.im-num { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 12.5px; }
+.im-num input { width: 66px; height: 28px; padding: 0 6px; border-radius: 7px; font-size: 12.5px; font-weight: 700; }
+.list-tools { justify-content: flex-start; align-items: center; gap: 4px; margin: -4px 0 10px; }
+.list-tools .dl-range { margin-left: auto; }
+.dl-format { margin: 4px 0 8px; }
+.list-tools select.im-lang { width: auto; max-width: 230px; flex: none; }
+
+/* Ventana «Importar de web» (la misma interfaz con ?ventana=importar): solo esa pantalla. El scan
+   se ve pero no se cambia desde aquí; el tema sigue al de la ventana principal. */
+body[data-window="import"] .view-tabs,
+body[data-window="import"] .update-chip,
+body[data-window="import"] #prefsBtn,
+body[data-window="import"] #settingsBtn,
+body[data-window="import"] #themeSwitch { display: none !important; }
+body[data-window="import"] .scan-chip { pointer-events: none; }
+body[data-window="import"] .scan-chip .chev { display: none; }

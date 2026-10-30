@@ -1,0 +1,135 @@
+/* =========================================================
+   Tema Mangation: fondo violeta grisáceo, acentos lavanda,
+   pestaña activa como píldora blanca con texto negro, tarjetas
+   grandes y redondeadas, títulos gruesos (M PLUS Rounded 1c)
+   con una etiqueta japonesa pequeña («Subir アップロード»).
+   ========================================================= */
+@font-face { font-family: "M PLUS Rounded 1c"; font-weight: 400 500; font-display: swap; src: url("../assets/fonts/mplus-rounded-500.woff2") format("woff2"); }
+@font-face { font-family: "M PLUS Rounded 1c"; font-weight: 600 700; font-display: swap; src: url("../assets/fonts/mplus-rounded-700.woff2") format("woff2"); }
+@font-face { font-family: "M PLUS Rounded 1c"; font-weight: 800 900; font-display: swap; src: url("../assets/fonts/mplus-rounded-800.woff2") format("woff2"); }
+
+body[data-platform="mangation"] {
+  --font-display: "M PLUS Rounded 1c", "Segoe UI", system-ui, sans-serif;
+  --mg-pill: #ffffff;
+  --mg-pill-text: #15131b;
+  --mg-pastel: #ddd3f6;
+  --mg-pastel-text: #1d1a26;
+  --radius: 18px;
+}
+[data-theme="dark"] body[data-platform="mangation"] {
+  --bg: #2b2735;
+  --grid-line: transparent; /* la cuadrícula es solo de Capibara */
+  --grid-glow: rgba(201, 184, 245, .08);
+  --surface: #36313f;
+  --surface-2: #3e3849;
+  --surface-3: #4a4356;
+  --border: #474052;
+  --border-strong: #585066;
+  --text: #f5f2fb;
+  --text-2: #d2cbdf;
+  --text-3: #a39bb2;
+  --accent: #c9b8f5;
+  --accent-2: #dcd0fa;
+  --accent-soft: rgba(201, 184, 245, .16);
+  --accent-text: #d8ccfb;
+  --on-accent: #1d1a26;
+  --glass: rgba(43, 39, 53, .9);
+  --overlay: rgba(20, 17, 27, .7);
+}
+[data-theme="light"] body[data-platform="mangation"] {
+  --bg: #f3f0f9;
+  --grid-line: transparent; /* la cuadrícula es solo de Capibara */
+  --grid-glow: rgba(123, 97, 217, .07);
+  --surface: #ffffff;
+  --surface-2: #f7f4fc;
+  --surface-3: #ebe6f5;
+  --border: #e4ddf0;
+  --border-strong: #d0c6e3;
+  --text: #1d1a26;
+  --text-2: #4d4660;
+  --text-3: #8a829b;
+  --accent: #7b61d9;
+  --accent-2: #9178e6;
+  --accent-soft: rgba(123, 97, 217, .12);
+  --accent-text: #6a4fd0;
+  --on-accent: #ffffff;
+  --mg-pill: #1d1a26;
+  --mg-pill-text: #ffffff;
+  --glass: rgba(255, 255, 255, .9);
+}
+
+/* Marca: «MG» en grueso, sin fondo */
+body[data-platform="mangation"] .brand-logo { background: transparent; box-shadow: none; color: var(--text); width: auto; }
+body[data-platform="mangation"] .brand-logo svg { display: none; }
+body[data-platform="mangation"] .brand-logo::after { content: "MG"; font: 900 21px/1 var(--font-display); letter-spacing: -.04em; }
+body[data-platform="mangation"] .brand-name { font-family: var(--font-display); font-weight: 800; }
+
+/* Títulos gruesos, sin cursiva ni mayúsculas, con su etiqueta japonesa */
+body[data-platform="mangation"] .hero h1,
+body[data-platform="mangation"] h2,
+body[data-platform="mangation"] h3,
+body[data-platform="mangation"] .dz-title {
+  font-family: var(--font-display); font-style: normal; text-transform: none; font-weight: 800; letter-spacing: -.01em;
+}
+body[data-platform="mangation"] .hero h1 { font-size: 32px; }
+body[data-platform="mangation"] .hero h1 .hl,
+body[data-platform="mangation"] h2 .hl { color: inherit; }
+body[data-platform="mangation"] .hero-kana {
+  display: inline-block; margin-right: 8px; padding: 2px 9px; border-radius: 999px; vertical-align: 1px;
+  background: var(--mg-pastel); color: var(--mg-pastel-text); font: 700 10.5px/1.5 "Yu Gothic UI", "Meiryo", var(--font);
+}
+body[data-platform="mangation"] .label,
+body[data-platform="mangation"] .stat-label { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 700; color: var(--text-2); }
+
+/* Tarjetas grandes y redondeadas */
+body[data-platform="mangation"] .card { border-radius: 26px; border-color: transparent; background: var(--surface); padding: 18px 18px 20px; }
+body[data-platform="mangation"] .step { background: var(--mg-pastel); color: var(--mg-pastel-text); }
+body[data-platform="mangation"] .stat { border-radius: 16px; background: var(--surface-2); }
+body[data-platform="mangation"] .modal-card { border-radius: 28px; border-color: transparent; }
+
+/* Pestañas y píldoras: la activa en blanco con texto negro */
+body[data-platform="mangation"] .mode-switch,
+body[data-platform="mangation"] .view-tabs { border-radius: 999px; background: var(--surface); padding: 5px; }
+body[data-platform="mangation"] .mode-switch button,
+body[data-platform="mangation"] .view-tabs button { border-radius: 999px; text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 13.5px; }
+body[data-platform="mangation"] .mode-switch button[aria-selected="true"],
+body[data-platform="mangation"] .view-tabs button[aria-selected="true"] { background: var(--mg-pill); color: var(--mg-pill-text); box-shadow: none; }
+body[data-platform="mangation"] .segmented { border-radius: 999px; }
+body[data-platform="mangation"] .segmented button { border-radius: 999px; }
+body[data-platform="mangation"] .segmented button[aria-checked="true"] { background: var(--mg-pill); color: var(--mg-pill-text); }
+body[data-platform="mangation"] .chip { border-radius: 999px; text-transform: none; letter-spacing: 0; font-weight: 700; background: var(--surface-3); border-color: transparent; }
+body[data-platform="mangation"] .chip.active { background: var(--mg-pastel); color: var(--mg-pastel-text); }
+body[data-platform="mangation"] .badge { border-radius: 999px; background: var(--mg-pastel); color: var(--mg-pastel-text); }
+body[data-platform="mangation"] .scan-chip,
+body[data-platform="mangation"] .platform-btn { background: var(--surface); border-color: transparent; color: var(--text); height: 36px; }
+
+/* Botones: el principal como la píldora blanca de «Explorar librería» */
+body[data-platform="mangation"] .btn { border-radius: 999px; font-weight: 700; letter-spacing: 0; }
+body[data-platform="mangation"] .btn.primary { background: var(--mg-pill); color: var(--mg-pill-text); text-transform: none; letter-spacing: 0; }
+body[data-platform="mangation"] .btn.primary:hover:not(:disabled) { background: var(--mg-pastel); color: var(--mg-pastel-text); }
+body[data-platform="mangation"] .btn.secondary { background: var(--surface-3); border-color: transparent; color: var(--text); }
+body[data-platform="mangation"] .btn.secondary:hover:not(:disabled) { background: var(--border-strong); }
+body[data-platform="mangation"] .icon-btn.small { border-radius: 999px; }
+
+/* Campos redondeados */
+body[data-platform="mangation"] input[type="text"], body[data-platform="mangation"] input[type="number"],
+body[data-platform="mangation"] input[type="password"], body[data-platform="mangation"] input[type="email"],
+body[data-platform="mangation"] input[type="datetime-local"], body[data-platform="mangation"] select,
+body[data-platform="mangation"] textarea, body[data-platform="mangation"] .combo-trigger {
+  border-radius: 16px; background-color: var(--surface-2); border-color: transparent;
+}
+body[data-platform="mangation"] input:focus, body[data-platform="mangation"] select:focus { border-color: var(--accent); }
+body[data-platform="mangation"] .switch input:checked + span { background: var(--accent); border-color: var(--accent); }
+body[data-platform="mangation"] .switch input:checked + span::after { background: var(--on-accent); }
+
+/* Páginas como tarjetas pastel */
+body[data-platform="mangation"] .dropzone { border-radius: 26px; border-color: var(--border-strong); }
+body[data-platform="mangation"] .thumb { border-radius: 20px; background: var(--mg-pastel); border: 0; padding: 6px; }
+body[data-platform="mangation"] .thumb-img { border-radius: 15px; }
+body[data-platform="mangation"] .thumb .thumb-name { color: var(--mg-pastel-text); font-weight: 700; }
+body[data-platform="mangation"] .thumb .thumb-size { color: #5d5672; }
+body[data-platform="mangation"] .thumb-num { border-radius: 999px; background: #8b7f63; color: #fff; }
+body[data-platform="mangation"] .chrow { border-radius: 22px; border-color: transparent; }
+body[data-platform="mangation"] .cover { border-radius: 12px; }
+body[data-platform="mangation"] .progress-bar { background: linear-gradient(90deg, #a996ea, var(--accent-2)); }
+body[data-platform="mangation"] .combo-pop, body[data-platform="mangation"] .scan-pop { border-radius: 22px; }

@@ -5,20 +5,14 @@
  */
 const path = require('node:path')
 const fs = require('node:fs/promises')
+const { sleep, pool, withTimeout, cancelled: cancelledError } = require('./util')
 
 const MAX_RETRIES = 3
 const MAX_BYTES = 40 * 1024 * 1024
+// Una conexión colgada no da error: pasado este tiempo se corta y se reintenta.
+const IMAGE_TIMEOUT = 75e3
 
-const sleep = (ms, signal) => new Promise((resolve, reject) => {
-  const t = setTimeout(resolve, ms)
-  signal?.addEventListener('abort', () => { clearTimeout(t); reject(cancelled()) }, { once: true })
-})
-
-function cancelled() {
-  const err = new Error('Descarga cancelada.')
-  err.code = 'cancelled'
-  return err
-}
+const cancelled = () => cancelledError('Descarga cancelada.')
 
 /** Extensión según la firma del archivo, o null si no es una imagen que Capibara acepte. */
 function sniff(buf) {
@@ -31,50 +25,46 @@ function sniff(buf) {
   return null
 }
 
+const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return 'el sitio' } }
+
 /**
- * Descarga una imagen con reintentos ante 429, 5xx y errores de red.
- * `fetcher` permite usar la sesión del navegador oculto (cookies de Cloudflare).
+ * Descarga una imagen con reintentos ante 429, 5xx, errores de red y conexiones colgadas.
+ * Devuelve { buffer, ext }. Falla sin reintentar (error con `fatal`) si el sitio responde un 4xx
+ * definitivo, si lo que llega no es una imagen o si pesa más de 40 MB; una imagen incompleta sí se
+ * reintenta. `fetcher` permite pasar las peticiones por otro camino (la sesión del navegador oculto,
+ * o el turno por sitio de los lectores propios); `retries` cuántas veces se reintenta.
  */
-async function fetchImage(url, { fetcher = fetch, headers = {}, signal } = {}) {
+async function fetchImage(url, { fetcher = fetch, headers = {}, signal, retries = MAX_RETRIES, timeout = IMAGE_TIMEOUT } = {}) {
   let lastErr
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     if (signal?.aborted) throw cancelled()
     try {
-      const res = await fetcher(url, { headers, signal, redirect: 'follow' })
+      const res = await fetcher(url, { headers, signal: withTimeout(signal, timeout), redirect: 'follow' })
       if (res.ok) {
         const buffer = Buffer.from(await res.arrayBuffer())
+        const declared = Number(res.headers.get('content-length'))
+        const fatal = (message) => Object.assign(new Error(message), { fatal: true })
+        if (!res.headers.get('content-encoding') && declared > 0 && buffer.length !== declared) throw new Error('La imagen llegó incompleta.')
         const ext = sniff(buffer)
-        if (!ext) throw Object.assign(new Error('El archivo descargado no es una imagen.'), { fatal: true })
-        if (buffer.length > MAX_BYTES) throw Object.assign(new Error('La imagen supera los 40 MB.'), { fatal: true })
+        if (!ext) throw fatal('El archivo descargado no es una imagen.')
+        if (buffer.length > MAX_BYTES) throw fatal('La imagen supera los 40 MB.')
         return { buffer, ext }
       }
-      lastErr = new Error(`HTTP ${res.status}`)
+      lastErr = new Error(`${hostOf(url)} respondió ${res.status}.`)
       if (res.status === 429) {
         const wait = Number(res.headers.get('retry-after')) || 5
-        if (attempt < MAX_RETRIES) { await sleep(Math.min(wait, 60) * 1000, signal); continue }
+        if (attempt < retries) { await sleep(Math.min(wait, 60) * 1000, signal); continue }
       }
-      if (res.status < 500 && res.status !== 429) break
+      // 404, 403, 410…: la página no existe o no la dan; reintentar solo gasta peticiones.
+      if (res.status < 500 && res.status !== 429 && res.status !== 408) throw Object.assign(lastErr, { fatal: true })
     } catch (err) {
       if (signal?.aborted) throw cancelled()
       if (err.fatal) throw err
-      lastErr = err
+      lastErr = err.name === 'TimeoutError' ? new Error(`${hostOf(url)} tardó demasiado en responder.`) : err
     }
-    if (attempt < MAX_RETRIES) await sleep(1000 * 2 ** attempt, signal)
+    if (attempt < retries) await sleep(1000 * 2 ** attempt, signal)
   }
   throw lastErr
-}
-
-/** Ejecuta `worker` sobre cada elemento con `limit` en paralelo. */
-async function pool(items, limit, worker, signal) {
-  let next = 0
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      if (signal?.aborted) throw cancelled()
-      const i = next++
-      await worker(items[i], i)
-    }
-  })
-  await Promise.all(runners)
 }
 
 /** Nombre válido en Windows: sin caracteres prohibidos, sin punto o espacio final y corto. */
@@ -110,4 +100,4 @@ async function writePage(dir, index, total, { buffer, ext }) {
   return file
 }
 
-module.exports = { fetchImage, pool, sniff, safeName, chapterFolderName, writePage, cancelled }
+module.exports = { fetchImage, sniff, safeName, chapterFolderName, writePage, cancelled }

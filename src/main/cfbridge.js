@@ -16,7 +16,7 @@ const path = require('node:path')
 const fsSync = require('node:fs')
 const fs = require('node:fs/promises')
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const { sleep } = require('./util')
 const CHALLENGE_TITLE = /^(just a moment|un momento|attention required|verif)/i
 const CONCEALED = /^x-fetchapi-/i
 const FORBIDDEN = /^(cookie|user-agent|host|origin|connection|content-length|accept-encoding|sec-|proxy-|keep-alive|transfer-encoding|upgrade|te|trailer|via|expect|date|dnt)/i

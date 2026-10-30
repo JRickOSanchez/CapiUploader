@@ -1,0 +1,117 @@
+/* =========================================================
+   Estilo Capibara Traductor
+   Fondo plano casi negro, acento cian, títulos en cursiva
+   gruesa y mayúsculas, etiquetas pequeñas espaciadas.
+   ========================================================= */
+body { background: var(--bg); }
+.hl { color: var(--accent-text); }
+[data-theme="dark"] .hl { color: var(--accent); }
+
+/* Barra superior */
+.topbar { background: var(--glass); border-bottom-color: var(--border); }
+.brand-logo { border-radius: 50%; box-shadow: none; }
+.brand-name { font-size: 16px; font-weight: 800; letter-spacing: -.02em; }
+.brand-sub { text-transform: uppercase; letter-spacing: .12em; font-size: 9.5px; font-weight: 700; }
+.scan-chip { height: 34px; border-radius: 999px; background: var(--surface); font-weight: 700; }
+
+/* Encabezado */
+.hero { padding: 4px 2px 2px; }
+.hero h1 {
+  margin: 0; font-family: var(--font-display); font-size: 30px; line-height: 1; font-weight: 900;
+  font-style: italic; text-transform: uppercase; letter-spacing: -.035em;
+}
+.hero p { margin-top: 6px; color: var(--text-3); font-size: 13px; }
+
+/* Tarjetas */
+.card { border-radius: 16px; border-color: var(--border); box-shadow: none; padding: 16px 16px 18px; }
+h2 {
+  font-size: 15px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -.01em;
+}
+.card-head .muted { margin-top: 2px; }
+.step {
+  width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--on-accent);
+  font-size: 12px; font-weight: 800; font-style: normal;
+}
+.badge { font-style: normal; background: var(--accent-soft); color: var(--accent-text); font-weight: 800; }
+.badge.accent { background: var(--gold-soft); color: var(--gold); text-transform: uppercase; letter-spacing: .04em; font-size: 10.5px; }
+
+/* Etiquetas tipo «ESTADO» */
+.label {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--text-3);
+}
+.counter { letter-spacing: 0; text-transform: none; }
+.stat-label { letter-spacing: .1em; font-weight: 800; font-size: 10px; }
+.stat { border-radius: 12px; background: var(--surface-2); }
+.stat-value { font-weight: 800; }
+
+/* Campos */
+input[type="text"], input[type="number"], input[type="password"], input[type="datetime-local"], select {
+  height: 44px; border-radius: 12px; background: var(--surface-2); border-color: var(--border-strong); font-weight: 500;
+}
+select { background-position: calc(100% - 17px) 19px, calc(100% - 12px) 19px; }
+.inline .btn { height: 44px; }
+input:focus, select:focus { box-shadow: 0 0 0 3px var(--accent-soft); }
+.combo-trigger { border-radius: 14px; background: var(--surface-2); }
+.combo-pop { border-radius: 16px; }
+.combo-list li { border-radius: 12px; }
+.combo-list li[aria-selected="true"] { background: var(--accent-soft); }
+
+/* Pestañas tipo «TODO / MANGA / MANHWA» */
+.mode-switch { border-radius: 14px; background: var(--surface); padding: 5px; gap: 5px; }
+.mode-switch button {
+  height: 40px; border-radius: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 800; font-size: 12.5px;
+}
+.mode-switch button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.segmented { border-radius: 12px; background: var(--surface); }
+.segmented button { border-radius: 8px; }
+.segmented button[aria-checked="true"] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.chip { text-transform: uppercase; letter-spacing: .06em; font-weight: 800; font-size: 11px; height: 28px; border-radius: 9px; }
+.chip.active { background: var(--accent); color: var(--on-accent); }
+
+/* Botones */
+.btn { border-radius: 12px; font-weight: 800; letter-spacing: .02em; }
+.btn.primary { background: var(--accent); color: var(--on-accent); box-shadow: none; text-transform: uppercase; letter-spacing: .06em; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-2); filter: none; }
+.btn.lg { height: 46px; border-radius: 12px; font-size: 13.5px; }
+.btn.secondary { background: var(--surface-2); border-color: var(--border-strong); }
+.btn.small { font-weight: 700; }
+.icon-btn { border-radius: 50%; background: var(--surface); }
+.icon-btn.small { border-radius: 10px; }
+
+/* Interruptores */
+.switch { width: 44px; height: 24px; }
+.switch span { background: var(--surface-3); border: 1px solid var(--border-strong); }
+.switch span::after { top: 2px; left: 2px; width: 18px; height: 18px; }
+.switch input:checked + span { background: var(--accent); border-color: var(--accent); }
+.switch input:checked + span::after { transform: translateX(20px); }
+.option-title { font-weight: 800; }
+
+/* Zona de páginas */
+.dropzone { border-radius: 16px; border-color: var(--border-strong); background: var(--bg); }
+.dropzone.has-files { background: var(--bg); }
+.dz-icon { border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.dz-title { font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -.01em; }
+.thumb { border-radius: 12px; background: var(--surface); }
+.thumb-img { border-radius: 11px 11px 0 0; }
+.thumb-num { border-radius: 8px; font-weight: 800; }
+.chrow { border-radius: 14px; box-shadow: none; }
+.ch-status { text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; font-weight: 800; }
+
+/* Barra inferior */
+.actionbar { background: var(--glass); }
+.summary-main { font-weight: 800; }
+.progress { height: 6px; }
+
+/* Modales y avisos */
+.modal-card { border-radius: 18px; }
+.modal-icon { border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+h3 { font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -.01em; }
+.toast { border-radius: 14px; }
+
+/* Destacada en dorado como «Suscripciones» */
+.thumb-featured.on { background: var(--gold); }
+.badge.featured { background: var(--gold-soft); color: var(--gold); }
+.ch-meta .featured { color: var(--gold); }
+/* Títulos de dos tonos: texto corrido (sin el espacio extra del flex) */
+h2 { display: block; }
+h2 .badge { margin-left: 6px; vertical-align: 2px; }

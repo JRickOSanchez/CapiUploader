@@ -12,7 +12,9 @@
 const path = require('node:path')
 const fs = require('node:fs/promises')
 const api = require('./api')
-const { fetchImage, pool, safeName, chapterFolderName, writePage, cancelled } = require('./images')
+const { fetchImage, safeName, chapterFolderName, writePage, cancelled } = require('./images')
+const { pool } = require('./util')
+const diagnostics = require('./diagnostics')
 
 const PAGE_CONCURRENCY = 4
 const LEGACY_MARKER = '.capiuploader.json'
@@ -133,6 +135,7 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
       if (['api.key_invalid', 'api.key_missing', 'api.scope_missing', 'api.rate_limited'].includes(err.code)) throw err
       await fs.rmdir(dir).catch(() => {}) // solo si quedó vacía
       summary.failed.push({ chapterId: ch.id, number: ch.number, error: err.message })
+      diagnostics.warn('descargar', `Capítulo ${ch.number} (id ${ch.id}): ${err.message}`)
       onProgress({ ...base, status: 'error', error: err.message })
     }
   }

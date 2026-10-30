@@ -1,9 +1,10 @@
 'use strict'
 
 /* =========================================================
-   «Importar de web»: lee una obra de otra web (motor de HaruNeko),
-   baja los capítulos elegidos y los pasa a «Varios capítulos».
-   Usa el estado y las utilidades de app.js y batch.js.
+   «Importar de web» (su propia ventana): lee una obra de otra web (lector
+   propio o motor de HaruNeko), baja los capítulos elegidos y los entrega a
+   la ventana principal, que los agrega a «Varios capítulos» para revisarlos.
+   Usa el estado y las utilidades globales de core.js.
    ========================================================= */
 const im = {
   url: '',
@@ -107,9 +108,11 @@ async function imPrepare() {
 
   im.rows = m.chapters.map((c) => {
     const p = parseChapterName(c.title)
+    // Los lectores propios ya traen número, tomo y scan; el motor de HaruNeko solo el título.
+    const number = c.number ?? p.number
     return {
-      index: c.index, title: c.title, languages: c.languages || [], group: imGroupOf(c.title),
-      number: p.number, volume: p.volume, label: imTitle(p, p.number),
+      index: c.index, title: c.title, languages: c.languages || [], group: c.group ?? imGroupOf(c.title),
+      number, volume: c.volume ?? p.volume, label: imTitle(p, number),
       selected: false, status: '', done: 0, total: 0, error: '',
     }
   })
@@ -207,7 +210,7 @@ function renderImTarget() {
       coverImg(work, 'cover lg'),
       el('div', { class: 'work-text' },
         el('span', { class: 'work-title', text: work.title, title: work.title }),
-        el('span', { class: 'work-meta', text: last ? `Último en Capibara: #${last.number}` : 'Aún sin capítulos en Capibara' }),
+        el('span', { class: 'work-meta', text: last ? `Último en ${plat().label}: #${last.number}` : `Aún sin capítulos en ${plat().label}` }),
         im.workGuess ? el('span', { class: 'badge warning', text: 'Detectada por el título: revísala' }) : null),
       pick))
     return
@@ -216,8 +219,12 @@ function renderImTarget() {
     el('span', { html: ICONS.warn }),
     el('div', {},
       el('strong', { text: `«${im.manga.title}» no está entre las obras de tu scan.` }),
-      el('p', { text: 'Por favor, crea primero la ficha de la obra en Capibara y vuelve a buscar. Si ya existe con otro nombre, elígela.' }),
+      el('p', { text: 'Créala aquí mismo con su ficha, o elígela si ya existe con otro nombre.' }),
       el('div', { class: 'im-warn-actions' },
+        el('button', {
+          type: 'button', class: 'btn primary small', disabled: im.running,
+          onclick: () => openNewWork({ title: im.manga.title, onCreated: imSetWork }),
+        }, `Crear la obra en ${plat().label}`),
         pick,
         el('button', {
           type: 'button', class: 'btn ghost small', disabled: im.running,
@@ -246,7 +253,7 @@ function renderImSite() {
     s.icon ? el('img', { src: s.icon, alt: '', class: 'im-site-icon' }) : el('span', { class: 'im-site-icon' }),
     el('div', { class: 'work-text' },
       el('span', { class: 'work-title', text: s.title }),
-      el('span', { class: 'work-meta', text: [s.template ? `Detectado: tema ${s.template}` : 'Sitio compatible', ...(s.languages || []).map(langLabel)].join(' · ') })))
+      el('span', { class: 'work-meta', text: [s.own ? 'Lector propio de CapiUploader' : s.template ? `Detectado: tema ${s.template}` : 'Sitio compatible', ...(s.languages || []).map(langLabel)].join(' · ') })))
 }
 
 function imStatusPill(r) {
@@ -260,18 +267,18 @@ function imStatusPill(r) {
     const [cls, text] = map[r.status]
     return el('span', { class: `ch-status ${cls}`, text, title: r.error || '' })
   }
-  if (r.number != null && imExisting().has(r.number)) return el('span', { class: 'ch-status skipped', text: 'Ya en Capibara' })
+  if (r.number != null && imExisting().has(r.number)) return el('span', { class: 'ch-status skipped', text: `Ya en ${plat().label}` })
   return el('span')
 }
 
 function imRow(r, dupes) {
   const num = el('input', {
-    type: 'number', step: 'any', min: '0', value: r.number ?? '', placeholder: '?', disabled: im.running, title: 'Número en Capibara',
+    type: 'number', step: 'any', min: '0', value: r.number ?? '', placeholder: '?', disabled: im.running, title: `Número en ${plat().label}`,
     onclick: (e) => e.stopPropagation(),
     oninput: (e) => { r.number = e.target.value === '' ? null : Number(e.target.value); renderImSummary(); markImRow(r) },
   })
   const pct = r.status === 'downloading' && r.total ? r.done / r.total : r.status === 'done' ? 1 : 0
-  const warn = r.selected && (r.number == null ? 'Falta el número' : dupes.has(r.number) ? 'Número repetido' : imExisting().has(r.number) ? 'Ya existe en Capibara' : '')
+  const warn = r.selected && (r.number == null ? 'Falta el número' : dupes.has(r.number) ? 'Número repetido' : imExisting().has(r.number) ? `Ya existe en ${plat().label}` : '')
   return el('li', {
     class: `dl-row im-row${r.selected ? ' on' : ''}${warn ? ' invalid' : ''}`, dataset: { index: r.index, status: r.status },
     title: r.error || warn || '',
@@ -355,7 +362,7 @@ function imProblems() {
   const existing = imExisting()
   const dupes = imDupes()
   if (!im.manga) return 'Busca la obra primero.'
-  if (!imWork()) return 'Elige la obra de Capibara a la que van los capítulos.'
+  if (!imWork()) return `Elige la obra de ${plat().label} a la que van los capítulos.`
   if (!chosen.length) return 'Marca al menos un capítulo.'
   if (chosen.some((r) => r.number == null)) return 'Hay capítulos marcados sin número: escríbelo en su fila.'
   if (dupes.size) return `El número ${[...dupes][0]} está repetido entre los marcados.`
@@ -394,14 +401,12 @@ function setImRunningUI(on) {
   $('#imCancelBtn').hidden = !on
   $('#imSearch').disabled = on
   $('#imUrl').disabled = on
-  setViewBusy('import', on)
   renderImTarget()
   renderImList()
 }
 
 async function imStart() {
   if (im.running || imProblems()) return
-  if (state.uploading) return toast('warn', 'Hay una subida en curso', 'Espera a que termine para importar más capítulos.')
   const work = imWork()
   const chosen = imChosen()
   for (const r of im.rows) { r.status = ''; r.error = ''; r.done = 0; r.total = 0 }
@@ -443,36 +448,27 @@ async function imStart() {
       `${failed.slice(0, 2).map((f) => `Cap ${f.number}: ${f.error}`).join(' · ')}${failed.length > 2 ? '…' : ''}`, 12000)
   }
   if (!dirs.length) return
-  await imHandOff(work, dirs.map((d) => d.dir))
+  await imHandOff(work, dirs.map((d) => d.dir), failed.length)
 }
 
-/** Pasa las carpetas bajadas a «Varios capítulos», con la obra fija y la publicación escalonada. */
-async function imHandOff(work, dirs) {
-  const res = await window.capi.files.resolveChapters(dirs)
-  if (!res.ok) return toast('error', 'No se pudieron preparar los capítulos', res.error.message)
-  setView('upload')
-  setMode('batch')
-  const interval = Math.max(0, Math.floor(Number($('#imInterval').value) || 0))
-  if (interval > 0) {
-    $('#scheduleToggle').checked = true
-    // El primero sale en 15 minutos; los demás, uno cada intervalo.
-    const first = new Date(Date.now() + 15 * 60e3)
-    first.setSeconds(0, 0)
-    first.setMinutes(Math.ceil(first.getMinutes() / 5) * 5)
-    $('#publishAt').value = toLocalInput(first)
-    $('#batchInterval').value = String(interval)
-    $('#batchIntervalUnit').value = $('#imIntervalUnit').value
-    $('#scheduleBox').hidden = false
-  }
-  await addChapters(res.data, { workId: work.id })
-  validate()
-  toast('success', `${plural(res.data.chapters.length, 'capítulo listo', 'capítulos listos')} para subir`,
-    interval > 0
-      ? `Programados uno ${every(interval, $('#imIntervalUnit').value)} desde ${formatDate(new Date($('#publishAt').value))}. Revisa la lista y pulsa «Subir capítulos».`
-      : 'Revisa la lista y pulsa «Subir capítulos».', 10000)
+/**
+ * Entrega las carpetas bajadas a la ventana principal («Varios capítulos», con la obra fija y la
+ * publicación escalonada). Si todo salió bien esta ventana se cierra; si algún capítulo falló, queda
+ * abierta para ver cuáles.
+ */
+async function imHandOff(work, dirs, failedCount = 0) {
+  const res = await window.capi.import.handoff({
+    workId: work.id,
+    dirs,
+    interval: Math.max(0, Math.floor(Number($('#imInterval').value) || 0)),
+    unit: $('#imIntervalUnit').value,
+  })
+  if (!res.ok) return toast('error', 'No se pudieron pasar a «Varios capítulos»', res.error.message)
+  if (!failedCount) return window.capi.import.closeWindow()
+  toast('info', `${plural(dirs.length, 'capítulo pasó', 'capítulos pasaron')} a «Varios capítulos»`, 'Los que fallaron siguen marcados aquí: puedes reintentarlos.', 10000)
 }
 
-/* ---------- Ganchos con app.js ---------- */
+/* ---------- Eventos (se suscriben en el init) ---------- */
 
 function imOnShow() {
   renderImTarget()
@@ -508,6 +504,9 @@ function imOnVerify(p) {
 }
 
 function initImport() {
+  on('scanChanged', imOnScanChanged)
+  on('worksLoaded', imOnWorksLoaded)
+  on('viewShown', (view) => { if (view === 'import') imOnShow() })
   window.capi.import.onVerify(imOnVerify)
   $('#imSearch').addEventListener('click', imSearch)
   $('#imUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') imSearch() })
@@ -538,5 +537,3 @@ function initImport() {
     window.capi.import.cancel()
   })
 }
-
-initImport()

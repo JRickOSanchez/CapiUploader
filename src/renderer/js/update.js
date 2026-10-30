@@ -98,5 +98,3 @@ function initUpdate() {
   window.capi.update.onState(onUpdateState)
   window.capi.update.state().then((r) => { if (r.ok) onUpdateState(r.data) })
 }
-
-initUpdate()

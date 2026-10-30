@@ -6,12 +6,18 @@
  *
  * Todo usa una sesión aparte («persist:scrape»): las cookies de esas webs nunca se mezclan con
  * la sesión de la app.
+ *
+ * El motor ocupa memoria (una ventana de Chromium con todo el catálogo): tras IDLE_MS sin órdenes se
+ * cierra solo y vuelve a arrancar con la siguiente. `generation()` cambia cada vez que el motor
+ * arranca o se cierra, para que quien guardó una obra abierta sepa que debe volver a abrirla.
  */
 const { app, BrowserWindow, ipcMain, session } = require('electron')
 const path = require('node:path')
 const os = require('node:os')
 const fs = require('node:fs/promises')
 const cfbridge = require('./cfbridge')
+const { cancelled: cancelledError } = require('./util')
+const diagnostics = require('./diagnostics')
 
 const PARTITION = 'persist:scrape'
 const CH = {
@@ -32,6 +38,11 @@ let host = null
 let ready = null
 let parentWindow = null
 let seq = 0
+let generation = 0
+let idleTimer = null
+// Sin órdenes durante este tiempo, el motor se cierra para liberar memoria.
+// Solo en desarrollo, CAPI_ENGINE_IDLE_MS acorta el plazo para probarlo; la app instalada lo ignora.
+const IDLE_MS = (!app.isPackaged && Number(process.env.CAPI_ENGINE_IDLE_MS)) || 10 * 60e3
 const pending = new Map() // id → { resolve, reject }
 const windows = new Set()
 
@@ -108,17 +119,15 @@ function routeThroughBrowser() {
   })
 }
 
-/* ---------- Registro de diagnóstico (sin valores de cookies) ---------- */
+/* ---------- Registro (va al de diagnóstico; nunca guarda valores de cookies) ---------- */
 
-let logFile = null
 function log(...parts) {
-  if (!logFile) logFile = path.join(app.getPath('userData'), 'scrape.log')
-  const line = `${new Date().toISOString()} ${parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}\n`
-  fs.appendFile(logFile, line).catch(() => {})
+  diagnostics.info('motor', parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '))
 }
 
+/** Avisos de la verificación de Cloudflare: a la ventana que importa (y a la principal). */
 function notify(payload) {
-  if (parentWindow && !parentWindow.isDestroyed()) parentWindow.webContents.send('import:verify', payload)
+  require('./window').sendAll('import:verify', payload)
 }
 
 /* ---------- Cabeceras (como app/electron/src/ipc/FetchProvider.ts de HaruNeko) ---------- */
@@ -318,6 +327,8 @@ function registerIpc() {
 function start() {
   if (ready) return ready
   setupSession()
+  generation++
+  log('motor iniciado')
   ready = new Promise((resolve, reject) => {
     host = new BrowserWindow({
       show: false,
@@ -345,6 +356,7 @@ function start() {
       const err = new Error(`El motor de importación se cerró (${d.reason}).`)
       for (const p of pending.values()) p.reject(err)
       pending.clear()
+      generation++
       host = null
       ready = null
       reject(err)
@@ -367,15 +379,36 @@ async function tunnelTest() {
   log('túnel de prueba listo', url)
 }
 
-/** Ejecuta una orden del motor. Con `signal`, cancelarla aborta la petición en el motor. */
+/** Cierra el motor si sigue sin uso (las cookies de la sesión se conservan). */
+function sleepIfIdle() {
+  clearTimeout(idleTimer)
+  idleTimer = setTimeout(() => {
+    if (pending.size || !host) return
+    log('motor cerrado por inactividad')
+    for (const w of windows) { try { destroyWindow(w) } catch {} }
+    if (!host.isDestroyed()) host.destroy()
+    generation++ // las obras abiertas en el motor ya no existen
+    host = null
+    ready = null
+  }, IDLE_MS)
+  idleTimer.unref?.()
+}
+
+/** Ejecuta una orden del motor (lo arranca si estaba cerrado). Con `signal`, cancelarla aborta la petición en el motor. */
 let tunnelTested = null
 async function call(method, args = [], { signal, timeout = 180e3 } = {}) {
+  clearTimeout(idleTimer)
   await start()
   await (tunnelTested ||= tunnelTest().catch((err) => log('túnel de prueba falló', err.message)))
   if (signal?.aborted) throw cancelled()
   const id = ++seq
   return new Promise((resolve, reject) => {
-    const done = (fn) => (v) => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); fn(v) }
+    const done = (fn) => (v) => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      if (!pending.size) sleepIfIdle()
+      fn(v)
+    }
     const onAbort = () => {
       host?.webContents.send('scrape:abort', id)
       pending.delete(id)
@@ -392,9 +425,16 @@ async function call(method, args = [], { signal, timeout = 180e3 } = {}) {
   })
 }
 
-function cancelled() {
-  return Object.assign(new Error('Importación cancelada.'), { code: 'cancelled' })
+/**
+ * Libera una obra abierta en el motor sin contar como uso (no lo despierta ni alarga su inactividad).
+ * La respuesta del motor no se espera.
+ */
+function forget(key) {
+  if (!host || host.isDestroyed()) return
+  host.webContents.send('scrape:cmd', { id: ++seq, method: 'release', args: [key] })
 }
+
+const cancelled = () => cancelledError('Importación cancelada.')
 
 function init(mainWindow) {
   parentWindow = mainWindow
@@ -404,9 +444,10 @@ function init(mainWindow) {
 function setParent(w) { parentWindow = w }
 
 function shutdown() {
+  clearTimeout(idleTimer)
   cfbridge.shutdown()
   for (const w of windows) { try { destroyWindow(w) } catch {} }
   if (host && !host.isDestroyed()) host.destroy()
 }
 
-module.exports = { init, setParent, start, call, shutdown }
+module.exports = { init, setParent, start, call, forget, shutdown, generation: () => generation }

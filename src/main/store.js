@@ -122,8 +122,26 @@ function setActiveId(id) {
   save()
 }
 
+/* ---------- Secretos (sesiones de otras plataformas) ----------
+   Se guardan cifrados igual que las API keys, en data.secrets[nombre]. */
+
+function getSecret(name) {
+  const s = data.secrets?.[name]
+  return s ? decodeKey(s) : null
+}
+
+function setSecret(name, value) {
+  if (!data.secrets || typeof data.secrets !== 'object') data.secrets = {}
+  if (value == null || value === '') delete data.secrets[name]
+  else data.secrets[name] = encodeKey(String(value))
+  save()
+}
+
+const deleteSecret = (name) => setSecret(name, null)
+
 module.exports = {
   init, get, set, isEncryptionAvailable,
+  getSecret, setSecret, deleteSecret,
   takeLegacyKey, clearLegacyKey,
   listProfiles, getProfile, getProfileKey, upsertProfile, updateProfile, removeProfile,
   getActiveId, setActiveId,

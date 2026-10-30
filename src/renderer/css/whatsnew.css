@@ -1,0 +1,60 @@
+/* =========================================================
+   Ventana «Novedades» (whatsnew.html)
+   ========================================================= */
+body.wn { height: 100vh; margin: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+.wn-head {
+  position: relative; display: flex; align-items: center; gap: 16px; padding: 26px 28px 22px;
+  border-bottom: 1px solid var(--border);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 55%),
+    var(--surface);
+}
+.wn-logo { width: 56px; height: 56px; border-radius: 16px; box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent); }
+.wn-kicker { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-text); }
+.wn-heading h1 { margin: 2px 0 0; font-size: 26px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -.01em; }
+.wn-meta { margin: 4px 0 0; font-size: 13px; color: var(--text-2); }
+
+.wn-body { flex: 1; overflow-y: auto; padding: 8px 28px 24px; }
+
+/* Notas del release */
+.wn-notes { font-size: 14px; line-height: 1.6; color: var(--text); user-select: text; }
+.wn-notes h2 {
+  margin: 22px 0 8px; font-size: 13px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--accent-text); display: flex; align-items: center; gap: 10px;
+}
+.wn-notes h2::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.wn-notes h3 { margin: 18px 0 6px; font-size: 16px; font-weight: 800; }
+.wn-notes h4 { margin: 14px 0 4px; font-size: 14px; font-weight: 700; }
+.wn-notes p { margin: 8px 0; }
+.wn-notes ul, .wn-notes ol { margin: 6px 0 10px; padding-left: 20px; }
+.wn-notes li { margin: 4px 0; }
+.wn-notes ul > li::marker { color: var(--accent); }
+.wn-notes strong { font-weight: 700; color: var(--text); }
+.wn-notes code {
+  font: 12.5px "Cascadia Code", Consolas, monospace; padding: 1px 6px; border-radius: 6px;
+  background: var(--surface-3); border: 1px solid var(--border);
+}
+.wn-notes pre { padding: 12px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); overflow-x: auto; }
+.wn-notes pre code { padding: 0; border: 0; background: none; }
+.wn-notes a { color: var(--accent-text); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.wn-notes a:hover { border-bottom-color: var(--accent); }
+.wn-notes blockquote {
+  margin: 12px 0; padding: 10px 14px; border-radius: 12px;
+  background: var(--warning-soft); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+}
+.wn-notes blockquote p { margin: 0; }
+.wn-notes table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.wn-notes th, .wn-notes td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.wn-notes th { color: var(--text-2); font-weight: 700; }
+.wn-notes hr { border: 0; height: 1px; background: var(--border); margin: 18px 0; }
+
+/* Cargando y sin notas */
+.wn-loading { display: flex; flex-direction: column; gap: 12px; padding-top: 22px; }
+.wn-skel { height: 12px; border-radius: 6px; background: var(--surface-3); animation: wn-pulse 1.2s ease-in-out infinite; }
+.wn-skel.w50 { width: 50%; } .wn-skel.w60 { width: 60%; } .wn-skel.w70 { width: 70%; } .wn-skel.w80 { width: 80%; } .wn-skel.w90 { width: 90%; }
+@keyframes wn-pulse { 50% { opacity: .45; } }
+.wn-empty { padding: 48px 12px; text-align: center; color: var(--text-2); }
+
+.wn-foot { display: flex; align-items: center; gap: 8px; padding: 14px 28px; border-top: 1px solid var(--border); background: var(--surface); }
+.wn-spacer { flex: 1; }

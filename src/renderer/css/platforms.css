@@ -1,0 +1,136 @@
+/* =========================================================
+   Plataformas: botón para cambiar de plataforma, lo que cada
+   una no tiene (data-cap), «También a…», cuenta y obra nueva
+   de Crimson y Mangation. Los temas de cada plataforma están
+   en platform-crimson.css y platform-mangation.css.
+   ========================================================= */
+
+/* Lo que la plataforma activa no tiene se oculta (body[data-caps] lo pone platforms.js). */
+body:not([data-caps~="volume"]) [data-cap="volume"],
+body:not([data-caps~="extras"]) [data-cap="extras"],
+body:not([data-caps~="announce"]) [data-cap="announce"],
+body:not([data-caps~="schedule"]) [data-cap="schedule"],
+body:not([data-caps~="notify"]) [data-cap="notify"],
+body:not([data-caps~="publish"]) [data-cap="publish"],
+body:not([data-caps~="download"]) [data-cap="download"],
+body:not([data-caps~="languages"]) [data-cap="languages"],
+body[data-caps~="volume"] [data-cap-not="volume"] { display: none !important; }
+body:not([data-caps~="singles"]) .thumb-single,
+body:not([data-caps~="singles"]) .ch-meta .singles,
+body:not([data-caps~="announce"]) .thumb-featured,
+body:not([data-caps~="announce"]) .ch-meta .featured { display: none !important; }
+/* Sin tomo, el número ocupa toda la fila. */
+body:not([data-caps~="volume"]) .column-form .grid-2:has(#chNumber) { grid-template-columns: 1fr; }
+
+/* ---------- Marca de cada plataforma ---------- */
+.platform-mark {
+  width: 22px; height: 22px; border-radius: 7px; flex: none; display: grid; place-items: center;
+  background: var(--accent); color: var(--on-accent); font: 900 10px/1 var(--font); letter-spacing: -.02em;
+}
+[data-platform="capibara"] > .platform-mark, .platform-mark[data-platform="capibara"], .platform-item[data-platform="capibara"] .platform-mark { background: #12b5d9; color: #fff; }
+[data-platform="crimson"] > .platform-mark, .platform-mark[data-platform="crimson"], .platform-item[data-platform="crimson"] .platform-mark { background: #ff2d6f; color: #fff; border-radius: 50%; }
+[data-platform="mangation"] > .platform-mark, .platform-mark[data-platform="mangation"], .platform-item[data-platform="mangation"] .platform-mark { background: #d9cff5; color: #1d1a26; border-radius: 9px; }
+.modal-icon.platform-mark { width: 42px; height: 42px; border-radius: 12px; font-size: 14px; }
+
+/* ---------- Botón y menú de plataforma (junto al chip del scan) ---------- */
+.platform-menu { position: relative; }
+.platform-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 6px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: 800 12px var(--font); cursor: pointer;
+}
+.platform-btn:hover { border-color: var(--border-strong); }
+.platform-btn[aria-expanded="true"] { border-color: var(--accent); }
+.platform-btn .chev { width: 14px; height: 14px; color: var(--text-3); transition: transform .2s; }
+.platform-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.platform-btn .platform-mark { width: 22px; height: 22px; }
+body[data-platform="capibara"] .platform-btn .platform-mark { background: #12b5d9; color: #fff; }
+body[data-platform="crimson"] .platform-btn .platform-mark { background: #ff2d6f; color: #fff; border-radius: 50%; }
+body[data-platform="mangation"] .platform-btn .platform-mark { background: #d9cff5; color: #1d1a26; }
+.platform-pop { width: 320px; }
+.platform-item .platform-mark { width: 32px; height: 32px; font-size: 12px; border-radius: 10px; }
+.platform-pop-hint { margin: 8px 8px 4px; font-size: 11.5px; color: var(--text-3); border-top: 1px solid var(--border); padding-top: 8px; }
+body[data-window="import"] .platform-btn { pointer-events: none; }
+body[data-window="import"] .platform-btn .chev { display: none; }
+
+.hero-kana { display: none; }
+
+/* ---------- «También a…» ---------- */
+.also { position: relative; }
+.also-btn { gap: 6px; border: 1px dashed var(--border-strong); color: var(--text-3); font-weight: 700; }
+.also-btn:hover:not(:disabled) { color: var(--text); border-color: var(--text-3); }
+.also-btn.on { border-style: solid; border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.also-dots { display: inline-flex; gap: 3px; }
+.also-dots:empty { display: none; }
+.also-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.also-dot[data-platform="capibara"] { background: #12b5d9; }
+.also-dot[data-platform="crimson"] { background: #ff2d6f; }
+.also-dot[data-platform="mangation"] { background: #b9a7ef; }
+body.uploading .also-btn { pointer-events: none; opacity: .6; }
+.also-pop {
+  position: absolute; right: 0; bottom: calc(100% + 12px); z-index: 70; width: 420px; max-height: min(520px, calc(100vh - 160px));
+  overflow-y: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px;
+  box-shadow: var(--shadow-lg); padding: 14px; animation: pop .16s var(--ease);
+}
+.also-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.also-head strong { font-size: 14px; }
+.also-head .muted { font-size: 12px; }
+.also-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.also-row { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: var(--surface-2); }
+.also-row.on { border-color: var(--accent); }
+.also-row-head { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.also-row-head input { width: 16px; height: 16px; accent-color: var(--accent); }
+.also-row-head .platform-mark { width: 26px; height: 26px; }
+.also-row-name { font-weight: 800; flex: 1; }
+.also-row-sub { font-size: 11.5px; color: var(--text-3); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.also-map { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.3fr); gap: 8px; align-items: center; margin-top: 8px; }
+.also-map-from { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.also-map-arrow { color: var(--text-3); }
+.also-map select { height: 34px; font-size: 12.5px; border-radius: 9px; }
+.also-map select.invalid { border-color: var(--danger); }
+.also-row .hint { margin: 8px 0 0; }
+.also-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; }
+
+/* Avance de cada plataforma durante una subida a varias. */
+.platform-progress { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.pp {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px 0 3px; border-radius: 999px;
+  background: var(--surface-3); font-size: 11px; font-weight: 700; color: var(--text-2);
+}
+.pp .platform-mark { width: 16px; height: 16px; font-size: 7.5px; border-radius: 50%; }
+.pp-state { color: var(--text-3); font-weight: 600; }
+.pp[data-status="done"] .pp-state, .pp[data-status="skipped"] .pp-state { color: var(--success); }
+.pp[data-status="error"] .pp-state { color: var(--danger); }
+.pp[data-status="uploading"] .pp-state, .pp[data-status="converting"] .pp-state { color: var(--accent-text); }
+
+/* ---------- Cuenta de Crimson / Mangation ---------- */
+.account-card { width: min(460px, 100%); }
+.account-status {
+  margin-bottom: 14px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px;
+  background: var(--success-soft); color: var(--text-2); border: 1px solid var(--border);
+}
+.account-form { display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------- Obra nueva en Crimson / Mangation ---------- */
+.altwork-card { width: min(760px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; }
+.altwork-body { display: grid; grid-template-columns: 200px 1fr; gap: 18px; }
+.altwork-images { display: flex; flex-direction: column; gap: 10px; }
+.altwork-cover, .altwork-banner {
+  position: relative; display: grid; place-items: center; overflow: hidden; padding: 0; cursor: pointer;
+  border: 1px dashed var(--border-strong); border-radius: 14px; background: var(--surface-2); color: var(--text-3);
+}
+.altwork-cover { aspect-ratio: 2 / 3; }
+.altwork-banner { aspect-ratio: 16 / 5; }
+.altwork-cover:hover, .altwork-banner:hover { border-color: var(--accent); color: var(--accent-text); }
+.altwork-cover img, .altwork-banner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.altwork-ph { display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 800; font-size: 13px; }
+.altwork-ph small { font-weight: 600; font-size: 11px; }
+.altwork-fields { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.aw-genres { display: flex; flex-wrap: wrap; gap: 5px; max-height: 150px; overflow-y: auto; margin-top: 6px; }
+.aw-genres .chip { text-transform: none; letter-spacing: 0; font-weight: 700; }
+#altWorkModal > .modal-card > .hint.error { display: block; margin-top: 10px; }
+
+/* Pasos de «Subir» numerados solos: si una plataforma oculta una tarjeta (p. ej. Publicación en
+   Mangation), los siguientes no se saltan un número. */
+main[data-pane="upload"] { counter-reset: paso; }
+main[data-pane="upload"] .step { font-size: 0; }
+main[data-pane="upload"] .step::before { counter-increment: paso; content: counter(paso); font-size: 12px; }

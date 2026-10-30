@@ -12,6 +12,7 @@
 const path = require('node:path')
 const fs = require('node:fs')
 const { app } = require('electron')
+const diagnostics = require('./diagnostics')
 
 const OWNER = 'JRickOSanchez'
 const REPO = 'CapiUploader'
@@ -119,6 +120,7 @@ async function check({ manual = false } = {}) {
     }
   } catch (err) {
     setState({ status: 'error', error: err?.message || String(err), checkedAt: Date.now() })
+    diagnostics.warn('actualizar', 'No se pudo buscar una versión nueva.', err)
   }
   return current
 }

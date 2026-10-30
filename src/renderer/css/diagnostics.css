@@ -1,0 +1,21 @@
+/* =========================================================
+   Registro de diagnóstico
+   ========================================================= */
+.diag-card { width: min(860px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+.diag-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.diag-toolbar .segmented button { padding: 0 12px; width: auto; font-size: 12.5px; font-weight: 600; }
+.diag-list {
+  list-style: none; margin: 0; padding: 4px; flex: 1; min-height: 220px; overflow-y: auto;
+  border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2);
+  font: 12px/1.45 "Cascadia Code", Consolas, monospace; user-select: text;
+}
+.diag-row { display: grid; grid-template-columns: auto auto auto 1fr; gap: 4px 10px; padding: 6px 8px; border-radius: 8px; align-items: baseline; }
+.diag-row:hover { background: var(--surface-3); }
+.diag-time { color: var(--text-3); }
+.diag-level { font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 6px; background: var(--surface-3); color: var(--text-2); }
+.diag-row.warn .diag-level { background: var(--warning-soft); color: var(--warning); }
+.diag-row.error .diag-level { background: var(--danger-soft); color: var(--danger); }
+.diag-area { color: var(--accent-text); font-weight: 600; }
+.diag-msg { color: var(--text); word-break: break-word; }
+.diag-detail { grid-column: 4; margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; color: var(--text-3); font: inherit; }
+.diag-empty { padding: 28px; text-align: center; color: var(--text-3); font-family: var(--font); }

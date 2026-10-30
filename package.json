@@ -1,7 +1,7 @@
 {
   "name": "capi-uploader",
   "productName": "CapiUploader",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Sube capítulos de manga a Capibara Traductor mediante su API.",
   "main": "src/main/main.js",
   "author": "SenshiManga",
@@ -9,8 +9,12 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "check": "node scripts/check.cjs",
+    "test": "node --test test/",
+    "predist": "npm run check && npm test",
     "dist": "electron-builder --win --publish never",
-    "icons": "electron scripts/build-icon.cjs"
+    "icons": "electron scripts/build-icon.cjs",
+    "installer-art": "electron scripts/build-installer-art.cjs"
   },
   "build": {
     "appId": "com.senshimanga.capiuploader",
@@ -54,7 +58,21 @@
       "createStartMenuShortcut": true,
       "shortcutName": "CapiUploader",
       "runAfterFinish": true,
-      "artifactName": "CapiUploader-Setup-${version}.${ext}"
+      "artifactName": "CapiUploader-Setup-${version}.${ext}",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
+      "include": "build/installer.nsh",
+      "language": "3082",
+      "installerLanguages": [
+        "es_ES"
+      ],
+      "multiLanguageInstaller": true,
+      "uninstallDisplayName": "CapiUploader",
+      "deleteAppDataOnUninstall": false
     },
     "portable": {
       "artifactName": "CapiUploader-Portable-${version}.${ext}",
@@ -83,7 +101,8 @@
         "repo": "CapiUploader",
         "releaseType": "release"
       }
-    ]
+    ],
+    "npmRebuild": false
   },
   "devDependencies": {
     "devalue": "^6.0.3",

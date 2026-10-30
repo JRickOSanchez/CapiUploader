@@ -10,10 +10,10 @@ const { spawn } = require('node:child_process')
 const crypto = require('node:crypto')
 const path = require('node:path')
 const fs = require('node:fs/promises')
+const { prepareCache } = require('./util')
 
 const PSD_EXTS = new Set(['.psd', '.psb'])
 const QUALITY = 92
-const CACHE_MAX_AGE = 3 * 24 * 60 * 60 * 1000
 // Windows limita la línea de comandos a ~32 000 caracteres.
 const MAX_ARGS_CHARS = 24000
 
@@ -36,15 +36,7 @@ function init(userData) {
 }
 
 async function prepare(userData) {
-  cacheDir = path.join(userData, 'psd-cache')
-  await fs.mkdir(cacheDir, { recursive: true })
-  // Limpieza de conversiones viejas; si algo falla da igual, se reintenta el próximo arranque.
-  const now = Date.now()
-  for (const name of await fs.readdir(cacheDir).catch(() => [])) {
-    const p = path.join(cacheDir, name)
-    const st = await fs.stat(p).catch(() => null)
-    if (st && now - st.mtimeMs > CACHE_MAX_AGE) await fs.rm(p, { recursive: true, force: true }).catch(() => {})
-  }
+  cacheDir = await prepareCache(path.join(userData, 'psd-cache'))
 }
 
 function cachedPath(src, st) {
