@@ -1,7 +1,7 @@
 'use strict'
 
 /* =========================================================
-   Plataformas: Capibara (API key por scan), Crimson Scan y
+   Plataformas: Capibara (API key por scan), ScanCrimson y
    Mangation (cuenta con usuario y contraseña). La activa decide
    las obras, lo que muestra el formulario (lo que no tiene se
    oculta con data-cap) y el tema (data-platform en <body>).
@@ -18,15 +18,15 @@ const PLATFORMS = {
     notify: ['Avisar a seguidores', 'Notificaciones, correos, webhooks y Discord. Apágalo para subir capítulos viejos en silencio.'],
   },
   crimson: {
-    label: 'Crimson Scan',
-    full: 'Crimson Scan',
+    label: 'ScanCrimson',
+    full: 'ScanCrimson',
     mark: 'CS',
-    heroSub: 'Publica en Crimson Scan directo desde tu escritorio. Las páginas se convierten a WebP solas.',
+    heroSub: 'Publica en ScanCrimson directo desde tu escritorio. Las páginas se convierten a WebP solas.',
     kana: '',
     caps: ['schedule', 'notify', 'publish'],
     notify: ['Avisar en Discord', 'Crimson anuncia el capítulo en su Discord. Apágalo para subir capítulos viejos en silencio.'],
     userLabel: 'Usuario',
-    account: 'Entra con tu cuenta del panel de Crimson Scan (admin.scancrimson.com).',
+    account: 'Entra con tu cuenta del panel de ScanCrimson (admin.scancrimson.com).',
   },
   mangation: {
     label: 'Mangation',

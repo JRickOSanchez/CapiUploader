@@ -1,4 +1,4 @@
-// Crimson Scan y Mangation contra servidores falsos: multipart por flujo, límites que pausan la
+// ScanCrimson y Mangation contra servidores falsos: multipart por flujo, límites que pausan la
 // tanda, capítulos a medias que se retoman y subidas que se cortan pero sí llegaron.
 const { test } = require('node:test')
 const assert = require('node:assert/strict')

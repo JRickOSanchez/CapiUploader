@@ -32,7 +32,7 @@ contextBridge.exposeInMainWorld('capi', {
     works: () => invoke('api:works'),
     chapters: (workId) => invoke('api:chapters', workId),
   },
-  // Plataforma activa (Capibara, Crimson Scan o Mangation) y sesiones de Crimson y Mangation.
+  // Plataforma activa (Capibara, ScanCrimson o Mangation) y sesiones de Crimson y Mangation.
   platform: {
     state: () => invoke('platform:state'),
     setActive: (platform) => invoke('platform:setActive', platform),

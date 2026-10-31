@@ -1,7 +1,32 @@
 # CapiUploader
 
 App de escritorio (Electron) para subir capítulos de manga a **Capibara Traductor** con su API v1, y también a
-**Crimson Scan** y **Mangation** (ver «Plataformas»).
+**ScanCrimson** y **Mangation** (ver «Plataformas»).
+
+## Reglas y restricciones
+
+**Capibara Traductor.** La app sigue, y debe seguir siempre, las reglas que autoriza el creador de
+capibaratraductor.com:
+
+- Se usa solo su **API v1 oficial**, con la API key de cada scan y los permisos que esa key tenga
+  (`chapters:write`, `works:write`…). La app no usa endpoints internos de la web ni inicia sesión con la
+  contraseña de la cuenta web.
+- Se respetan los **límites de la API**: la app lee los que manda Capibara (`X-RateLimit-*`), espera antes de
+  llegar al tope y se pausa cuando el límite se alcanza, en vez de insistir.
+- **No se salta ninguna protección.** Si la web protege sus imágenes, no se intenta obtenerlas por otro
+  camino. Las páginas de Capibara solo se leen con la API y la key del scan dueño de la obra («Descargar» e
+  importar desde Capibara).
+- Si las reglas o la API de Capibara cambian, la app se ajusta a ellas, aunque eso signifique quitar funciones.
+
+**Otras webs y plataformas.** La herramienta puede extenderse a otras webs (ScanCrimson, Mangation y los
+sitios de «Importar de web»), siempre con estas condiciones:
+
+- Se usan sus paneles y APIs con la cuenta del propio usuario, con su ritmo de peticiones y sin saltarse
+  verificaciones ni protecciones.
+- «Importar de web» es para traer **contenido del propio scan**: antes de importar hay que confirmarlo.
+- **Si el dueño de una web integrada no está de acuerdo**, la integración con su sitio **se retira**, o se
+  ajusta a las condiciones y reglas que ese sitio tenga. Basta con pedirlo abriendo un *issue* en
+  [el repositorio](https://github.com/JRickOSanchez/CapiUploader/issues).
 
 ## Uso
 
@@ -19,7 +44,7 @@ Al actualizar desde la 1.0, la clave guardada se convierte sola en el primer sca
 
 ## Plataformas
 
-Junto al chip del scan, arriba a la derecha, el botón de plataforma cambia entre **Capibara**, **Crimson Scan** y
+Junto al chip del scan, arriba a la derecha, el botón de plataforma cambia entre **Capibara**, **ScanCrimson** y
 **Mangation**. Cada una tiene sus obras, su lista de «Capítulos subidos», su última obra elegida y su propio
 estilo (Crimson: vino casi negro con acento rosa y títulos serif; Mangation: violeta grisáceo con lavanda y
 pestañas tipo píldora). Las fuentes de esos temas van incluidas en `src/renderer/assets/fonts` (licencia OFL,
@@ -27,7 +52,7 @@ ver `OFL.txt`).
 
 - **Capibara**: API key por scan, como siempre. Tiene todo: tomos, extras, páginas simples, página destacada,
   programar, avisos, «Descargar» y la ventana de importar.
-- **Crimson Scan**: se entra con el usuario y la contraseña del panel (admin.scancrimson.com). Se puede
+- **ScanCrimson**: se entra con el usuario y la contraseña del panel (admin.scancrimson.com). Se puede
   programar la publicación y elegir si se avisa en Discord; no hay tomos, extras, páginas simples ni página
   destacada, así que el formulario los oculta. Crimson solo acepta páginas **WebP**: la app las convierte sola.
   Crimson limita los capítulos por cuenta («máximo N capítulos cada M minutos»); al llegar al tope, «Varios

@@ -1,5 +1,5 @@
 /**
- * Plataformas a las que se puede subir: Capibara (API key por scan), Crimson Scan y Mangation (sesión
+ * Plataformas a las que se puede subir: Capibara (API key por scan), ScanCrimson y Mangation (sesión
  * con usuario y contraseña). Aquí está lo que cada una permite (la interfaz oculta lo demás) y la
  * subida a varias a la vez:
  *   - las páginas se leen una vez; la conversión a WebP (solo Crimson y Mangation) se hace una vez y
@@ -19,7 +19,7 @@ const { describeFile } = require('../files')
 const diagnostics = require('../diagnostics')
 
 const IDS = ['capibara', 'crimson', 'mangation']
-const LABELS = { capibara: 'Capibara', crimson: 'Crimson Scan', mangation: 'Mangation' }
+const LABELS = { capibara: 'Capibara', crimson: 'ScanCrimson', mangation: 'Mangation' }
 const remote = { crimson, mangation }
 const EXISTING_TTL = 2 * 60e3
 

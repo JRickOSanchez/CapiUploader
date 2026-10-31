@@ -1,7 +1,7 @@
 'use strict'
 
 /* =========================================================
-   «Nueva obra» en Crimson Scan y Mangation: la ficha con lo
+   «Nueva obra» en ScanCrimson y Mangation: la ficha con lo
    que pide cada una (Crimson: géneros por nombre, banner
    opcional; Mangation: demografía, géneros de su lista y
    portada obligatoria de hasta 5 MB). Las imágenes se mandan

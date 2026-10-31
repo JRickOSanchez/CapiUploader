@@ -1,8 +1,8 @@
-Fuentes incluidas en CapiUploader para los temas de Crimson Scan y Mangation.
+Fuentes incluidas en CapiUploader para los temas de ScanCrimson y Mangation.
 Todas se distribuyen bajo la SIL Open Font License 1.1 (texto completo abajo, una vez por familia).
 
-- Playfair Display (playfair-display*.woff2): tema de Crimson Scan
-- Poppins (poppins-*.woff2): tema de Crimson Scan
+- Playfair Display (playfair-display*.woff2): tema de ScanCrimson
+- Poppins (poppins-*.woff2): tema de ScanCrimson
 - M PLUS Rounded 1c (mplus-rounded-*.woff2): tema de Mangation
 Subconjunto latino descargado de Google Fonts.
 

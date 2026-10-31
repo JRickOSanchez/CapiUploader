@@ -1,5 +1,5 @@
 /**
- * Crimson Scan (el panel admin.scancrimson.com habla con este Worker). Lo que usa la app:
+ * ScanCrimson (el panel admin.scancrimson.com habla con este Worker). Lo que usa la app:
  *   POST /api/auth/login {username,password} → {token,user}   GET /api/auth/me
  *   GET  /api/mangas?admin=1 → {mangas}      GET /api/mangas/:id?admin=1 → {manga, capitulos}
  *   POST /api/mangas {titulo,tipo,estado,descripcion,generos,scan_id,joint_scan_id,es_adulto} → {mangaId}
@@ -16,7 +16,7 @@ const { pool, cancelled } = require('../util')
 const diagnostics = require('../diagnostics')
 
 const ID = 'crimson'
-const LABEL = 'Crimson Scan'
+const LABEL = 'ScanCrimson'
 const DEFAULT_BASE = 'https://crimson-api.leandro-reyes1025.workers.dev'
 const ORIGIN = 'https://admin.scancrimson.com'
 const SECRET = 'crimsonToken'
@@ -323,7 +323,7 @@ function signOut() {
 /** Ejecuta fn(token, user); si el servidor rechaza la sesión, se borra. */
 async function withSession(fn) {
   const token = currentToken()
-  if (!token) throw new PlatformError('Inicia sesión en Crimson Scan para continuar.', 'crimson.session_expired', 401)
+  if (!token) throw new PlatformError('Inicia sesión en ScanCrimson para continuar.', 'crimson.session_expired', 401)
   try {
     return await fn(token, store().get(USER) || {})
   } catch (err) {
