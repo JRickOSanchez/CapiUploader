@@ -54,7 +54,7 @@ test('un capítulo que «ya existe» tras un corte se da por creado', async () =
   let posts = 0
   await withFetch(async (url, init = {}) => {
     if (init.method === 'PUT') return response(200, {})
-    if (url.endsWith('/uploads')) return response(200, { status: true, data: { uploads: [{ uploadUrl: 'https://s/1', contentType: 'image/png', key: 'k1' }] } })
+    if (url.endsWith('/uploads')) return response(200, { status: true, data: { uploads: [{ uploadUrl: 'https://s.example/1', contentType: 'image/png', key: 'k1' }] } })
     if (init.method === 'POST') {
       posts++
       // El primer intento llega a Capibara pero la respuesta se pierde; el reintento ve el duplicado.
@@ -81,7 +81,7 @@ test('keepOnly deja solo las claves de los capítulos por reintentar', async () 
   // Dos subidas que fallan al crear el capítulo: sus claves quedan guardadas para reintentar.
   await withFetch(async (url, init = {}) => {
     if (init.method === 'PUT') return response(200, {})
-    if (url.endsWith('/uploads')) return response(200, { status: true, data: { uploads: [{ uploadUrl: 'https://s', contentType: 'image/png', key: `k${Math.random()}` }] } })
+    if (url.endsWith('/uploads')) return response(200, { status: true, data: { uploads: [{ uploadUrl: 'https://s.example', contentType: 'image/png', key: `k${Math.random()}` }] } })
     return response(400, { status: false, errorCode: 'api.invalid_request', message: 'No' })
   }, async () => {
     for (const f of [a, b]) {
@@ -126,5 +126,31 @@ test('si el motor se cerró por inactividad, la obra se vuelve a abrir y el cap�
   // El capítulo «b» estaba en la posición 1 y ahora en la 0, en la obra vuelta a abrir.
   assert.deepEqual(calls.find((c) => c[0] === 'pages'), ['pages', 'm1', 0])
   assert.match(opened.key, /^e\d+$/)
+  await fs.rm(dir, { recursive: true, force: true })
+})
+
+test('si los primeros capítulos fallan con el mismo error, no se piden los demás', async () => {
+  const calls = []
+  const fake = {
+    generation: () => 1,
+    start: async () => ({ websites: 1 }),
+    async call(method, args) {
+      calls.push(method)
+      if (method === 'manga') return { key: 'm1', title: 'Obra', chapters: Array.from({ length: 10 }, (_, index) => ({ index, id: `c${index}`, title: `${index + 1}` })) }
+      if (method === 'pages') return { count: 0 } // la web no da páginas
+      return true
+    },
+  }
+  require.cache[require.resolve('../src/main/scrape')] = { id: 'scrape', loaded: true, exports: fake }
+  delete require.cache[require.resolve('../src/main/importer')]
+  const importer = require('../src/main/importer')
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'capi-imp-'))
+  await importer.init(dir)
+  const opened = await importer.open('https://web.com/obra', 'sitio')
+  const chapters = Array.from({ length: 10 }, (_, index) => ({ index, number: index + 1 }))
+  const res = await importer.download({ key: opened.key, workTitle: 'Obra', chapters, signal: new AbortController().signal, onProgress: () => {} })
+  assert.equal(res.failed.length, 3)
+  assert.equal(calls.filter((c) => c === 'pages').length, 3)
+  assert.deepEqual(res.stopped, { error: 'El sitio no devolvió páginas para este capítulo.', remaining: 7 })
   await fs.rm(dir, { recursive: true, force: true })
 })

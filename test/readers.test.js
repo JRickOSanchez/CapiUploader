@@ -20,12 +20,14 @@ test('identify reconoce cada sitio y rechaza las URLs de capítulos', () => {
     'https://readdarkgathering.com/': 'dark',
     'https://enchiladascan.github.io/enchiladaweb/ririsa/inicio': 'enchilada',
     'https://zonatmo.org/library/manga/1682/gachiakuta': 'tmo',
+    'https://capibaratraductor.com/scanprueba/manga/prueba-bot-no-publicar': 'capibara',
   }
   for (const [url, site] of Object.entries(ok)) assert.equal(readers.identify(url)?.site, site, url)
   assert.equal(readers.identify('https://mangadex.org/title/a77742b1-befd-49a4-bff5-1ad4e6b0ef7b/x').id, 'a77742b1-befd-49a4-bff5-1ad4e6b0ef7b')
-  for (const url of ['https://mangatv.net/leer/abc', 'https://onfmangas.com/lector/1/x', 'https://zonatmo.org/view_uploads/5', 'https://mangadex.org/chapter/x']) {
+  for (const url of ['https://mangatv.net/leer/abc', 'https://onfmangas.com/lector/1/x', 'https://zonatmo.org/view_uploads/5', 'https://mangadex.org/chapter/x', 'https://capibaratraductor.com/scanprueba/manga/obra/chapters/1']) {
     assert.match(readers.identify(url).error, /capítulo/, url)
   }
+  assert.deepEqual([readers.identify('https://capibaratraductor.com/ScanPrueba/manga/Obra').org, readers.identify('https://capibaratraductor.com/ScanPrueba/manga/Obra').slug], ['scanprueba', 'obra'])
   assert.equal(readers.identify('https://otraweb.com/manga/x'), null)
   assert.equal(readers.identify('no es una url'), null)
 })

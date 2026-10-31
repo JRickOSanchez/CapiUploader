@@ -91,7 +91,18 @@ test('request devuelve el error de Capibara con su código de rastreo', async ()
 test('putFile no reintenta un 4xx', async () => {
   let calls = 0
   await withFetch(async () => { calls++; return response(403, {}) }, async () => {
-    await assert.rejects(api.putFile('https://s/x', 'image/png', Buffer.alloc(1)), /HTTP 403/)
+    await assert.rejects(api.putFile('https://s.example/x', 'image/png', Buffer.alloc(1)), /HTTP 403/)
+  })
+  assert.equal(calls, 1)
+})
+
+test('putFile rechaza destinos de subida que no son https de un dominio', async () => {
+  let calls = 0
+  await withFetch(async () => { calls++; return response(200, {}) }, async () => {
+    for (const url of ['http://s.example/x', 'https://127.0.0.1/x', 'https://[::1]/x', 'https://localhost/x', 'https://u:p@s.example/x', 'no es url']) {
+      await assert.rejects(api.putFile(url, 'image/png', Buffer.alloc(1)), { code: 'api.bad_upload_url' }, url)
+    }
+    await api.putFile('https://cuenta.r2.cloudflarestorage.com/x?firma=1', 'image/png', Buffer.alloc(1))
   })
   assert.equal(calls, 1)
 })

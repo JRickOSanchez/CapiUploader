@@ -143,11 +143,21 @@ cancela. El tema, el scan activo y las obras nuevas se mantienen al día entre l
 Los sitios se leen con el motor de [HaruNeko](https://github.com/manga-download/haruneko) (Unlicense),
 que conoce más de 800 webs. Las webs que no están en su catálogo pero usan los temas Madara o
 MangaStream/Themesia se leen con lectores genéricos. Si un sitio entrega imágenes de relleno en lugar
-de las páginas, el capítulo falla con un aviso y no se sube vacío.
+de las páginas, el capítulo falla con un aviso y no se sube vacío. Si los 3 primeros capítulos fallan con el
+mismo error (la web no los está dando), la importación se detiene en vez de pedirle todos los demás.
+
+**Botones de selección.** «Todos», «Los que faltan» y el tramo «Marcar» marcan **una versión por número**: si la
+web tiene el mismo capítulo de varios scans, queda la primera (filtra por scan para elegir otra). En las
+plataformas sin programación (Mangation) no se ofrece «Programarlos uno cada…».
+
+**Desde Capibara** (para pasar una obra de tu scan a Crimson o Mangation): se pega el enlace de la obra
+(`https://capibaratraductor.com/<scan>/manga/<obra>`). La web de Capibara protege sus imágenes, así que se
+leen con la API oficial y la API key de ese scan, igual que «Descargar»: solo funciona con obras de los scans
+agregados en la app, y la key necesita el permiso `chapters:write`. La key no sale del proceso principal.
 
 **Lectores propios.** Algunas webs de scans en español se leen con lectores de la app
 (`src/main/readers/`, un archivo por web), sin el motor: **MangaTV**, **ONF Mangas**, **MangaDex**,
-**ShadeManga**, **ZonaTMO**, **Dark Gathering** y **Enchilada Scan**. Traen el número, el tomo, el scan
+**ShadeManga**, **ZonaTMO**, **Dark Gathering**, **Enchilada Scan** y **Capibara** (con la API). Traen el número, el tomo, el scan
 y el idioma de cada capítulo. Si uno falla y HaruNeko conoce la web, se reintenta con él.
 
 - MangaTV cifra la lista de páginas de su lector y mete páginas señuelo que no existen; la app la

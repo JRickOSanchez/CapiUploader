@@ -164,8 +164,26 @@ async function requestAll(key, path, signal) {
   return all
 }
 
+/**
+ * La URL firmada que da la API debe ser https y de un dominio: nunca http, localhost ni una IP
+ * (si la respuesta viniera alterada, las páginas no se mandan a cualquier lado).
+ */
+function checkUploadUrl(url) {
+  let u
+  try { u = new URL(String(url)) } catch { u = null }
+  const host = u?.hostname.replace(/^\[|\]$/g, '') || ''
+  const bad = !u || u.protocol !== 'https:' || u.username || u.password || !host.includes('.') ||
+    /^[\d.]+$/.test(host) || host.includes(':') || /(^|\.)localhost$|\.local$|\.internal$/i.test(host)
+  if (bad) {
+    const err = new Error('Capibara devolvió un destino de subida no permitido. No se subió nada; vuelve a intentarlo.')
+    err.code = 'api.bad_upload_url'
+    throw err
+  }
+}
+
 /** Sube un binario a una URL firmada. Reintenta ante 429, 5xx y errores de red; no ante otros 4xx. */
 async function putFile(url, contentType, buffer, signal) {
+  checkUploadUrl(url)
   let lastErr
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -182,4 +200,4 @@ async function putFile(url, contentType, buffer, signal) {
   throw lastErr
 }
 
-module.exports = { request, requestAll, putFile, ApiError }
+module.exports = { request, requestAll, putFile, checkUploadUrl, ApiError }

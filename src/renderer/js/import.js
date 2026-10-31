@@ -160,7 +160,7 @@ function imRenderGroups(pickOwn = false) {
   sel.hidden = !show
   if (!show) { im.group = ''; sel.innerHTML = ''; return }
   if (pickOwn) {
-    const own = normTitle(activeProfile()?.name || '')
+    const own = normTitle((isCapibara() ? activeProfile()?.name : accountName(state.platform)) || '')
     let best = null
     let score = 0
     for (const g of groups) {
@@ -177,17 +177,27 @@ function imRenderGroups(pickOwn = false) {
   if (untagged) sel.append(el('option', { value: NO_GROUP, selected: im.group === NO_GROUP, text: `Sin scan indicado (${untagged})` }))
 }
 
-/** Marca los que aún no están en Capibara, uno por número (la primera versión que aparezca). */
-function imSelectMissing() {
-  const existing = imExisting()
+/**
+ * Marca las filas visibles que cumplan `keep`, una por número: si la web tiene varias versiones del
+ * mismo capítulo (de distintos scans), queda la primera que aparezca. Las que no traen número se
+ * marcan igual cuando `withoutNumber` (hay que escribírselo antes de importar).
+ */
+function imSelectUnique(keep = () => true, { withoutNumber = false } = {}) {
   const seen = new Set()
   for (const r of im.rows) r.selected = false
   for (const r of imVisible()) {
-    if (r.number == null || existing.has(r.number) || seen.has(r.number)) continue
+    if (r.number == null) { r.selected = withoutNumber; continue }
+    if (seen.has(r.number) || !keep(r)) continue
     seen.add(r.number)
     r.selected = true
   }
   renderImList()
+}
+
+/** Marca los que aún no están en la plataforma de destino, uno por número. */
+function imSelectMissing() {
+  const existing = imExisting()
+  imSelectUnique((r) => !existing.has(r.number))
 }
 
 /* ---------- Obra de destino ---------- */
@@ -442,8 +452,11 @@ async function imStart() {
     else toast('error', 'No se pudo importar', res.error.message, 9000)
     return
   }
-  const { dirs, failed } = res.data
-  if (failed.length) {
+  const { dirs, failed, stopped } = res.data
+  if (stopped) {
+    toast('error', 'La web no está dando los capítulos',
+      `Los primeros ${failed.length} fallaron igual («${stopped.error}»), así que no se pidieron los otros ${stopped.remaining}. Revisa el enlace o prueba más tarde; si sigue igual, manda el registro desde Ajustes.`, 15000)
+  } else if (failed.length) {
     toast('warn', `${plural(failed.length, 'capítulo no se pudo bajar', 'capítulos no se pudieron bajar')}`,
       `${failed.slice(0, 2).map((f) => `Cap ${f.number}: ${f.error}`).join(' · ')}${failed.length > 2 ? '…' : ''}`, 12000)
   }
@@ -460,7 +473,8 @@ async function imHandOff(work, dirs, failedCount = 0) {
   const res = await window.capi.import.handoff({
     workId: work.id,
     dirs,
-    interval: Math.max(0, Math.floor(Number($('#imInterval').value) || 0)),
+    // Mangation no programa: los capítulos se publican conforme se suben.
+    interval: hasCap('schedule') ? Math.max(0, Math.floor(Number($('#imInterval').value) || 0)) : 0,
     unit: $('#imIntervalUnit').value,
   })
   if (!res.ok) return toast('error', 'No se pudieron pasar a «Varios capítulos»', res.error.message)
@@ -514,21 +528,14 @@ function initImport() {
   $('#imLang').addEventListener('change', (e) => { im.lang = e.target.value; imRenderGroups(); imSelectMissing() })
   $('#imGroup').addEventListener('change', (e) => { im.group = e.target.value; imSelectMissing() })
   $('#imMissing').addEventListener('click', () => { if (!im.running) imSelectMissing() })
-  $('#imAll').addEventListener('click', () => { if (!im.running) { imVisible().forEach((r) => { r.selected = true }); renderImList() } })
+  $('#imAll').addEventListener('click', () => { if (!im.running) imSelectUnique(() => true, { withoutNumber: true }) })
   $('#imNone').addEventListener('click', () => { if (!im.running) { im.rows.forEach((r) => { r.selected = false }); renderImList() } })
   $('#imRange').addEventListener('click', () => {
     if (im.running) return
     const from = $('#imFrom').value.trim() === '' ? -Infinity : Number($('#imFrom').value)
     const to = $('#imTo').value.trim() === '' ? Infinity : Number($('#imTo').value)
     if (from > to) return toast('warn', 'El tramo está al revés', '«Del» debe ser menor o igual que «al».')
-    const seen = new Set()
-    for (const r of im.rows) r.selected = false
-    for (const r of imVisible()) {
-      if (r.number == null || r.number < from || r.number > to || seen.has(r.number)) continue
-      seen.add(r.number)
-      r.selected = true
-    }
-    renderImList()
+    imSelectUnique((r) => r.number >= from && r.number <= to)
   })
   $('#imConfirm').addEventListener('change', renderImSummary)
   $('#imStartBtn').addEventListener('click', imStart)

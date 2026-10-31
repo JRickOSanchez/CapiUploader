@@ -15,6 +15,7 @@ const diagnostics = require('./diagnostics')
 const PAGE_CONCURRENCY = 4
 const PLACEHOLDER_BYTES = 1024
 const MAX_BYTES = 40 * 1024 * 1024
+const STOP_AFTER = 3
 const OWN = 'own:'
 
 let cacheDir = null
@@ -114,6 +115,8 @@ async function open(url, websiteId) {
   try {
     return await openOwn(href)
   } catch (err) {
+    // Un error definitivo (p. ej. una obra de Capibara de otro scan) no se arregla con el motor.
+    if (err.final) throw err
     // Respaldo: si HaruNeko conoce la web, que la lea él.
     diagnostics.warn('importar', `El lector propio falló (${err.message}); se prueba con HaruNeko.`)
     const res = await scrape.start().then(() => scrape.call('identify', [href])).catch(() => null)
@@ -193,11 +196,19 @@ async function download({ key, workTitle, chapters, signal, onProgress }) {
   const job = path.join(cacheDir, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
   const workDir = path.join(job, safeName(workTitle, 'Obra'))
   await fs.mkdir(workDir, { recursive: true })
-  const result = { dirs: [], failed: [], pages: 0 }
+  const result = { dirs: [], failed: [], pages: 0, stopped: null }
   const source = sourceFor(key, signal)
 
   for (let c = 0; c < chapters.length; c++) {
     if (signal.aborted) throw cancelled()
+    // Si los primeros fallan todos con el mismo error, la web no los está dando: no tiene caso
+    // pedirle los demás (con 93 capítulos serían 93 errores iguales).
+    const last = result.failed.slice(-STOP_AFTER)
+    if (!result.dirs.length && last.length === STOP_AFTER && last.every((f) => f.error === last[0].error)) {
+      result.stopped = { error: last[0].error, remaining: chapters.length - c }
+      diagnostics.warn('importar', `Se detuvo tras ${STOP_AFTER} capítulos con el mismo error: ${last[0].error}`)
+      break
+    }
     const ch = chapters[c]
     const base = { index: ch.index, position: c, count: chapters.length }
     onProgress({ ...base, status: 'start', done: 0, total: 0 })

@@ -19,6 +19,7 @@ const SITES = [
   require('./sites/dark'),
   require('./sites/enchilada'),
   require('./sites/tmo'),
+  require('./sites/capibara'),
 ]
 const byId = new Map(SITES.map((s) => [s.id, s]))
 // Los reintentos de las imágenes de los lectores propios se hacen solo aquí (importer.js no los repite).

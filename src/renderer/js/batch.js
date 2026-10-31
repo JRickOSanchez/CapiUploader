@@ -1023,6 +1023,7 @@ async function batchReceiveImport({ dirs, workId, interval, unit }) {
   if (!res.ok) return toast('error', 'No se pudieron preparar los capítulos importados', res.error.message)
   setView('upload')
   setMode('batch')
+  if (!hasCap('schedule')) interval = 0
   if (interval > 0) {
     $('#scheduleToggle').checked = true
     // El primero sale en 15 minutos; los demás, uno cada intervalo.
