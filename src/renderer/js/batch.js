@@ -201,9 +201,10 @@ function defaultVolumeFor(workId) {
 
 /* ---------- Agregar / quitar ---------- */
 
-async function pickChapters() {
+/** mode 'archives': elegir comprimidos (cada uno es un capítulo, o varios si trae varias carpetas). */
+async function pickChapters(mode) {
   if (state.uploading) return
-  const res = await window.capi.files.pickChapters()
+  const res = await window.capi.files.pickChapters(mode === 'archives' ? 'archives' : 'folders')
   if (res.ok) addChapters(res.data)
 }
 
@@ -215,7 +216,7 @@ async function addChapterPaths(paths) {
 }
 
 /** opts.workId fija la obra de todos los capítulos (p. ej. al venir de «Importar de web»). */
-async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
+async function addChapters({ chapters, skipped, looseFiles, problems, psd }, opts = {}) {
   const known = new Set(batch.items.map((i) => i.dir))
   const fresh = chapters.filter((c) => !known.has(c.dir))
   const dupes = chapters.length - fresh.length
@@ -231,6 +232,7 @@ async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
       id: ++batch.seq,
       name: c.name,
       dir: c.dir,
+      archive: c.archive || null,
       parent: c.parent || '',
       ancestors,
       files: c.files.map((f) => ({ ...f, id: ++fileSeq, status: null })),
@@ -276,9 +278,10 @@ async function addChapters({ chapters, skipped, looseFiles, psd }, opts = {}) {
     toast(guesses.size || unassigned ? 'warn' : 'success', `${plural(items.length, 'capítulo agregado', 'capítulos agregados')}`, msg || null, guesses.size ? 10000 : 7000)
   }
   if (dupes) toast('info', `${dupes} carpeta(s) ya estaban en la lista`)
-  if (looseFiles) toast('warn', 'Se ignoraron imágenes sueltas', 'En este modo cada capítulo debe ser una carpeta. Para un solo capítulo usa «Un capítulo».', 7000)
+  if (looseFiles) toast('warn', 'Se ignoraron imágenes sueltas', 'En este modo cada capítulo debe ser una carpeta o un comprimido. Para un solo capítulo usa «Un capítulo».', 7000)
   if (skipped.length) toast('warn', `${skipped.length} carpeta(s) sin imágenes`, skipped.slice(0, 3).join(', ') + (skipped.length > 3 ? '…' : ''))
-  if (!chapters.length && !looseFiles && !skipped.length) toast('warn', 'No se encontraron capítulos')
+  if (!chapters.length && !looseFiles && !skipped.length && !problems?.length) toast('warn', 'No se encontraron capítulos')
+  reportArchiveProblems(problems)
   reportPsd(psd)
 
   renderBatch()
@@ -532,6 +535,7 @@ function batchValidate() {
       const s = plan.map.get(it.id) || {}
       const work = workById(it.workId)
       if (!work) err = state.works.length ? 'Elige la obra de este capítulo.' : 'Cargando las obras del scan…'
+      else if (!canUploadTo(work)) { err = JOINT_VIEWER_TEXT; always = true }
       else if (it.number == null || Number.isNaN(it.number)) err = it.extra ? 'Falta el número del extra.' : 'Falta el número del capítulo.'
       else if (it.number < 0) err = 'El número no puede ser negativo.'
       else if (it.number >= EXTRA_BASE) { err = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`; always = true }
@@ -591,7 +595,7 @@ function renderBatchSummary(plan, errors) {
   $('#batchCount').textContent = String(batch.items.length)
   $('#batchSummary').textContent = batch.items.length
     ? `${plural(batch.items.length, 'capítulo', 'capítulos')} · ${formatNumber(allPages)} páginas · ${formatBytes(batch.items.reduce((s, it) => s + sumSize(it.files), 0))} — arrastra ⠿ para reordenar dentro de cada obra.`
-    : 'Una carpeta por capítulo. Puedes mezclar obras del mismo scan.'
+    : 'Una carpeta o un comprimido por capítulo. Puedes mezclar obras del mismo scan.'
   if (state.uploading) return
 
   const main = $('#summaryMain')
@@ -708,7 +712,7 @@ function chapterRow(it) {
         el('label', { class: 'ch-field', 'data-cap': 'volume' }, el('span', { class: 'pre', text: 'Vol' }), vol),
         title),
       el('div', { class: 'ch-meta' },
-        el('span', { class: 'folder', text: `📁 ${it.name}`, title: it.dir }),
+        el('span', { class: 'folder', text: `${it.archive ? '🗜️' : '📁'} ${it.name}`, title: it.archive ? `Del comprimido ${it.archive}` : it.dir }),
         el('span', { class: 'sep' }),
         el('span', { text: `${it.files.length} pág. · ${formatBytes(total)}` }),
         countSingles(it.files) ? el('span', { class: 'singles', text: `${countSingles(it.files)} simple${countSingles(it.files) === 1 ? '' : 's'}` }) : null,
@@ -928,7 +932,9 @@ function initBatchDrop() {
     if ((e.key === 'Enter' || e.key === ' ') && e.target === dz) { e.preventDefault(); pickChapters() }
   })
   $('#batchPickBtn').addEventListener('click', (e) => { e.stopPropagation(); pickChapters() })
-  $('#batchAddBtn').addEventListener('click', pickChapters)
+  $('#batchPickArchivesBtn').addEventListener('click', (e) => { e.stopPropagation(); pickChapters('archives') })
+  $('#batchAddBtn').addEventListener('click', () => pickChapters())
+  $('#batchAddArchivesBtn').addEventListener('click', () => pickChapters('archives'))
 
   dz.addEventListener('dragenter', (e) => {
     if (!isExternal(e) || state.uploading) return

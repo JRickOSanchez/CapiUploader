@@ -109,6 +109,7 @@ async function batchStart() {
       ok++
       tally.ok++
       warnSingles(res.data.singleCheck, itemLabel(it))
+      noteJointResult(workById(it.workId), res.data, itemLabel(it))
       const cache = state.chaptersByWork.get(it.workId)
       const entry = { id: res.data.id, number: res.data.number ?? it.number, extra: Boolean(it.extra), extraNumber: it.extra ? it.number : null, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url }
       if (cache) cache.push(entry)

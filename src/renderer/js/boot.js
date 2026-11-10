@@ -14,6 +14,8 @@ async function boot() {
   if (isImportWindow) return bootImportWindow()
 
   initPsdProgress()
+  initArchiveProgress()
+  initJoints()
   // El tema se pide al proceso principal; mientras tanto se preparan las secciones.
   const themeReady = initTheme()
   const platformsReady = initPlatforms()

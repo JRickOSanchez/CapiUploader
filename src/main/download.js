@@ -8,6 +8,11 @@
  *
  * Capibara guarda las páginas en WEBP; se pueden convertir a JPG (calidad 92) o PNG, o dejar
  * el original.
+ *
+ * También se puede guardar cada capítulo comprimido (`Obra/Cap 12 - Título.cbz` o `.zip`, con las
+ * páginas en la raíz): se bajan a la carpeta del capítulo como siempre, se empaquetan y se borran
+ * las páginas sueltas. Si ya había una carpeta completa de una descarga anterior, se empaqueta y se
+ * deja como estaba. «Varios capítulos» también acepta esos comprimidos para volver a subirlos.
  */
 const path = require('node:path')
 const fs = require('node:fs/promises')
@@ -15,11 +20,14 @@ const api = require('./api')
 const { fetchImage, safeName, chapterFolderName, writePage, cancelled } = require('./images')
 const { pool } = require('./util')
 const diagnostics = require('./diagnostics')
+const { writeZip, zipEntries } = require('./zip')
 
 const PAGE_CONCURRENCY = 4
 const LEGACY_MARKER = '.capiuploader.json'
 const JPG_QUALITY = 0.92
 const FORMATS = { original: null, jpg: '.jpg', png: '.png' }
+// Cómo se guarda cada capítulo: carpeta con las páginas, o un comprimido.
+const PACKS = { folder: null, cbz: '.cbz', zip: '.zip' }
 
 /** Conversión con el decodificador de Chromium (ventana del motor de importación). */
 async function convertWithEngine(buffer, format) {
@@ -38,6 +46,20 @@ async function isComplete(dir, total, format) {
   if (!Number.isInteger(total) || total < 1) return false
   const names = await fs.readdir(dir).catch(() => null)
   if (!names || names.some((n) => /\.part$/i.test(n))) return false
+  const sizeOf = async (name) => (await fs.stat(path.join(dir, name)).catch(() => null))?.size || 0
+  return hasAllPages(names, sizeOf, total, format)
+}
+
+/** Lo mismo con un comprimido ya guardado: sus páginas están en la raíz del ZIP. */
+async function isPackComplete(file, total, format) {
+  if (!Number.isInteger(total) || total < 1) return false
+  const entries = await zipEntries(file)
+  if (!entries) return false
+  const sizes = new Map(entries.map((e) => [e.name, e.size]))
+  return hasAllPages(entries.map((e) => e.name), async (name) => sizes.get(name) || 0, total, format)
+}
+
+async function hasAllPages(names, sizeOf, total, format) {
   const pages = names.filter((n) => PAGE_RE.test(n))
   if (pages.length !== total) return false
   const ext = FORMATS[format]
@@ -45,11 +67,14 @@ async function isComplete(dir, total, format) {
   for (let i = 1; i <= total; i++) {
     const num = String(i).padStart(width, '0')
     const name = pages.find((n) => path.parse(n).name === num && (!ext || path.extname(n).toLowerCase() === ext))
-    if (!name) return false
-    const st = await fs.stat(path.join(dir, name)).catch(() => null)
-    if (!st?.size) return false
+    if (!name || !(await sizeOf(name))) return false
   }
   return true
+}
+
+/** Las páginas de una carpeta completa, en orden (para empaquetarla). */
+async function pageNames(dir) {
+  return (await fs.readdir(dir)).filter((n) => PAGE_RE.test(n)).sort()
 }
 
 /** Las versiones 1.3.0 y 1.3.1 dejaban este archivo en cada capítulo; se borra al pasar por ahí. */
@@ -62,11 +87,14 @@ const removeLegacyMarker = (dir) => fs.rm(path.join(dir, LEGACY_MARKER), { force
  * @param {Array<{ id, number, volumeNumber, title, pages, extra, extraNumber }>} o.chapters  pages: cuántas tiene según la lista de la obra
  * @param {string} o.dest       carpeta elegida por el usuario
  * @param {'original' | 'jpg' | 'png'} o.format
+ * @param {'folder' | 'cbz' | 'zip'} o.pack  carpeta con las páginas o un comprimido por capítulo
  * @param {(p: object) => void} o.onProgress
  */
-async function downloadChapters({ key, work, chapters, dest, format = 'jpg', signal, onProgress, convert = convertWithEngine }) {
+async function downloadChapters({ key, work, chapters, dest, format = 'jpg', pack = 'folder', signal, onProgress, convert = convertWithEngine }) {
   if (!(format in FORMATS)) format = 'jpg'
+  if (!(pack in PACKS)) pack = 'folder'
   const targetExt = FORMATS[format]
+  const packExt = PACKS[pack]
   const workDir = path.join(dest, safeName(work.title, `Obra ${work.id}`))
   await fs.mkdir(workDir, { recursive: true })
   const summary = { done: 0, skipped: 0, failed: [], pages: 0, workDir }
@@ -75,14 +103,28 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
     if (signal.aborted) throw cancelled()
     const ch = chapters[c]
     const dir = path.join(workDir, chapterFolderName(ch))
+    const packFile = packExt ? dir + packExt : null
+    // Dónde quedó el capítulo (para «Abrir carpeta»): su carpeta, o la de la obra si va comprimido.
+    const shownDir = packFile ? workDir : dir
     const base = { chapterId: ch.id, position: c, count: chapters.length }
+    const ready = (total) => (packFile ? isPackComplete(packFile, total, format) : isComplete(dir, total, format))
+    // Comprimido: si ya hay una carpeta completa (de una descarga en carpetas), se empaqueta sin bajar nada.
+    const packExisting = async (total) => {
+      if (!packFile || !(await isComplete(dir, total, format))) return false
+      await writeZip(packFile, dir, await pageNames(dir))
+      summary.done++
+      summary.pages += total
+      onProgress({ ...base, status: 'done', dir: shownDir, total })
+      return true
+    }
 
-    if (await isComplete(dir, ch.pages, format)) {
-      await removeLegacyMarker(dir)
+    if (await ready(ch.pages)) {
+      if (!packFile) await removeLegacyMarker(dir)
       summary.skipped++
-      onProgress({ ...base, status: 'skipped', dir })
+      onProgress({ ...base, status: 'skipped', dir: shownDir })
       continue
     }
+    if (await packExisting(ch.pages)) continue
 
     onProgress({ ...base, status: 'start', done: 0, total: 0 })
     try {
@@ -98,11 +140,12 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
       if (pages.some((p) => !p.imageUrl)) throw new Error('La API no devolvió la dirección de alguna página.')
       await removeLegacyMarker(dir)
       // La lista de la obra no traía el número de páginas (o no coincidía): se revisa con el real.
-      if (ch.pages !== pages.length && await isComplete(dir, pages.length, format)) {
+      if (ch.pages !== pages.length && await ready(pages.length)) {
         summary.skipped++
-        onProgress({ ...base, status: 'skipped', dir })
+        onProgress({ ...base, status: 'skipped', dir: shownDir })
         continue
       }
+      if (ch.pages !== pages.length && await packExisting(pages.length)) continue
       await fs.mkdir(dir, { recursive: true })
 
       const files = new Array(pages.length)
@@ -127,9 +170,15 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
       for (const name of await fs.readdir(dir)) {
         if (!keep.has(name) && /^\d+\.(jpg|png|gif|webp|avif)(\.part)?$/i.test(name)) await fs.rm(path.join(dir, name), { force: true })
       }
+      if (packFile) {
+        await writeZip(packFile, dir, files)
+        // Las páginas sueltas ya están en el comprimido; la carpeta se borra si quedó vacía.
+        for (const name of files) await fs.rm(path.join(dir, name), { force: true })
+        await fs.rmdir(dir).catch(() => {})
+      }
       summary.done++
       summary.pages += pages.length
-      onProgress({ ...base, status: 'done', dir, total: pages.length })
+      onProgress({ ...base, status: 'done', dir: shownDir, total: pages.length })
     } catch (err) {
       if (signal.aborted || err.code === 'cancelled') throw cancelled()
       if (['api.key_invalid', 'api.key_missing', 'api.scope_missing', 'api.rate_limited'].includes(err.code)) throw err
@@ -142,4 +191,4 @@ async function downloadChapters({ key, work, chapters, dest, format = 'jpg', sig
   return summary
 }
 
-module.exports = { downloadChapters }
+module.exports = { downloadChapters, PACKS }

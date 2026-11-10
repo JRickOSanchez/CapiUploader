@@ -105,7 +105,8 @@ muestra un punto).
   que se llaman «Extra 2», «Especial», «Omake» o «Bonus» se marcan solas, salvo que el nombre traiga
   antes un «Cap N» («Cap 12 - Un día especial» sigue siendo el cap 12). «Numerar desde el último» no
   toca los extras, y «Descargar» los guarda como `Extra N - Título`.
-- **Varios capítulos**: una carpeta por capítulo, de una o varias obras del mismo scan.
+- **Varios capítulos**: una carpeta o un comprimido por capítulo, de una o varias obras del mismo scan
+  (ver [Comprimidos](#comprimidos-zip-cbz-rar-cbr-7z)).
   - La obra se detecta por el nombre de la carpeta que contiene los capítulos. Por ejemplo, elegir
     `Choujin X` con `Cap 1`, `Cap 2`… dentro los asigna a esa obra. También funciona con
     `Lote/Obra/Capítulo` (reparte por obra) y con `Obra/Vol 2/Capítulo`, que además pone el tomo 2.
@@ -128,6 +129,26 @@ muestra un punto).
     subida se pausa con una cuenta atrás y sigue sola con el mismo capítulo.
 
 Desde la 1.3 no hay acceso anticipado: Capibara retiró los capítulos de lectura anticipada.
+
+### Joints
+
+Un joint es una obra que llevan varios scans juntos en Capibara. Los joints donde tu scan es miembro
+aparecen en la lista de obras con la etiqueta **Joint**, y se sube a ellos igual que a una obra propia, en «Un
+capítulo» o en «Varios capítulos» (`POST /joints/:id/chapters`).
+
+- **Roles.** Debajo de la obra se muestra tu rol. El **líder** y el **uploader** pueden subir. Si tu scan
+  **solo puede ver**, la app no deja subir y lo explica; si el servidor lo rechaza igual (`api.joint_viewer`),
+  se muestra el mismo mensaje claro.
+- **Números.** Los capítulos del joint cuentan como de la obra: el número siguiente se sugiere sobre todos ellos y
+  un número que ya está en el joint se marca como repetido. Si otro scan ocupa el número justo mientras subes,
+  Capibara deja tu capítulo **en tu ficha** como otra versión (`quedoEnFicha`), y la app avisa quién lo tiene.
+- **Versiones y papelera.** El botón «Versiones y papelera» abre cada número con sus versiones (de qué scan es
+  cada una y cuál ven los lectores). «Mostrar la mía» pone tu versión como la visible (`versions/show`), y
+  «Liberar mi elección» la suelta para que otro scan elija la suya (`versions/release`). Si otro scan ya fijó
+  la suya, la app lo dice. La pestaña «Papelera» lista lo borrado del joint (30 días) y permite restaurar.
+- Al adivinar la obra por el nombre de una carpeta, si una obra propia y un joint se parecen igual, gana la obra
+  propia; el joint se elige con «Cambiar obra».
+- «Descargar» no muestra los joints, porque sus capítulos son de varios scans.
 
 ### Nueva obra
 
@@ -220,6 +241,14 @@ formato que lee «Varios capítulos». Si se repite la descarga, se saltan los c
 todas sus páginas en ese formato. En la carpeta solo quedan las imágenes, así que se puede subir tal
 cual a un Drive. Las versiones 1.3.0 y 1.3.1 dejaban un `.capiuploader.json`, que se borra al volver a descargar.
 
+**Guardar cada capítulo como** elige entre la carpeta con las páginas (por defecto) o un comprimido por
+capítulo: **CBZ** (lo abren los lectores de cómics) o **ZIP**. El comprimido queda como
+`Obra/Vol 3 Cap 12 - Título.cbz`, con las páginas en la raíz y sin volver a comprimirlas (ya vienen comprimidas), y
+la carpeta de trabajo se borra al terminar. Si ya había una carpeta completa de una descarga anterior, se
+empaqueta sin volver a bajar nada y la carpeta se deja como estaba. Al repetir la descarga se saltan los
+comprimidos que ya tienen todas las páginas en ese formato. «Varios capítulos» acepta esos comprimidos para
+volver a subirlos. Lo escribe `src/main/zip.js`, sin dependencias.
+
 ## Ajustes, diagnóstico y novedades
 
 El fondo de la app lleva una cuadrícula tenue, como la web de Capibara (`css/base.css`).
@@ -260,6 +289,31 @@ que compone todas las capas y vuelve a dibujar el texto con las fuentes instalad
 
 `psdc.exe` está en `vendor/psdc/` y se empaqueta con la app. Cómo se compiló y el parche que lleva
 están en `vendor/psdc/SOURCE.md`.
+
+## Comprimidos (ZIP, CBZ, RAR, CBR, 7Z…)
+
+En los dos modos se pueden agregar comprimidos en lugar de carpetas: `.zip`, `.cbz`, `.rar`, `.cbr` (RAR4 y
+RAR5), `.7z`, `.cb7`, `.tar`, `.cbt` y tar comprimidos (`.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`…).
+
+- **Un capítulo**: todas las imágenes del comprimido, primero las sueltas y después las de cada carpeta, en
+  orden natural.
+- **Varios capítulos**: un comprimido con las imágenes sueltas (o en una sola carpeta) es un capítulo y se
+  llama como el archivo (`Cap 12.cbz` → «Cap 12»). Si trae varias carpetas, cada una es un capítulo y el
+  nombre del archivo cuenta como la carpeta de la obra (`Choujin X.zip/Cap 1`). Una carpeta llena de
+  comprimidos (`Choujin X/Cap 1.cbz`, `Cap 2.cbz`…) funciona igual que una de carpetas. «Seleccionar
+  comprimidos» y el botón «Comprimidos» los eligen (Windows no deja elegir carpetas y archivos a la vez);
+  arrastrarlos funciona con todo.
+- Solo se extraen imágenes y PSD (se ignoran `__MACOSX` y los `._` de macOS) a
+  `%APPDATA%CapiUploaderarchive-cache`, que se reutiliza mientras el archivo no cambie y se borra a los 3
+  días. La extracción corre en un hilo aparte, así que la ventana no se congela, y se ve su avance.
+- Antes de extraer se revisa la lista: un comprimido **con contraseña**, **dañado o incompleto**, **sin
+  imágenes**, con más de 5000 imágenes o de más de 8 GB descomprimido se rechaza con un aviso claro, y los demás
+  se agregan igual.
+
+Se usa [7-Zip](https://www.7-zip.org/) compilado a WebAssembly ([7z-wasm](https://github.com/use-strict/7z-wasm)),
+licencia GNU LGPL con la restricción de unRAR: **el código de RAR solo se usa para descomprimir y no puede
+usarse para desarrollar un compresor compatible con RAR (WinRAR)**. Las licencias van en
+`node_modules/7z-wasm/License.txt` y `unRarLicense.txt`, dentro del instalador.
 
 ## Motor de importación (HaruNeko)
 
@@ -313,7 +367,8 @@ que no se comprueba el editor del instalador; sí su sha512, que viene en `lates
 
 1. `POST /uploads` firma URLs para todas las páginas (lotes de 100).
 2. Cada imagen se sube con `PUT` directo al almacenamiento (4 en paralelo, con reintentos).
-3. `POST /works/:id/chapters` crea el capítulo con las claves en orden de lectura.
+3. `POST /works/:id/chapters` crea el capítulo con las claves en orden de lectura (en un joint,
+   `POST /joints/:id/chapters`).
 
 Si la creación falla (p. ej. número repetido), las páginas ya subidas se reutilizan durante 45 min al
 reintentar. Pasado ese plazo se olvidan solas (se revisa cada 5 min), y al terminar una tanda de «Varios
@@ -373,12 +428,13 @@ La app instalada las ignora.
     sesión de cada una). `webp.js` es el convertidor (con `renderer/converter.html` y
     `preload/converter.js`).
   - Lógica sin Electron, probada en `test/`: `api.js` (cliente de la API), `upload.js` (subida de un
-    capítulo), `files.js` (archivos y carpetas), `works.js` (obras nuevas), `download.js` («Descargar»),
+    capítulo), `files.js` (archivos y carpetas), `works.js` (obras nuevas), `download.js` («Descargar») y `zip.js` (los CBZ/ZIP que guarda),
     `images.js` (bajar y nombrar imágenes) y `util.js` (esperas, paralelo, tareas, cachés).
   - «Importar de web»: `importer.js` (descarga de capítulos), `scrape.js` y `cfbridge.js` (motor de HaruNeko
     y Cloudflare) y `readers/` (lectores propios: `index.js` los une, `http.js` y `html.js` son comunes y
     `sites/` tiene un archivo por web con la misma forma: `match`, `headers`, `list`, `pages`).
-  - `store.js` guarda ajustes y claves cifradas; `psd.js` convierte los PSD; `updater.js` actualiza la app.
+  - `store.js` guarda ajustes y claves cifradas; `psd.js` convierte los PSD; `archives.js` abre los
+    comprimidos con 7-Zip; `joints.js` lee y sube a los joints; `updater.js` actualiza la app.
   - `diagnostics.js` es el registro de diagnóstico (y `ipc/diagnostics.js` sus canales); `whatsnew.js` la
     ventana de novedades y `markdown.js` convierte las notas de los releases a HTML seguro.
 - `src/preload/` — puentes seguros entre la interfaz y el proceso principal: `preload.js` (`window.capi`) y
@@ -386,16 +442,18 @@ La app instalada las ignora.
 - `src/renderer/` — interfaz (HTML, CSS y JS sin frameworks).
   - `js/` se carga en este orden: `core.js` (utilidades, estado, tema, avisos, preguntas y los eventos
     `on`/`emit` entre secciones), `platforms.js` (plataforma activa y cuentas), `scans.js`, `works.js`, `names.js`, `picker.js`, `single.js` (Un
-    capítulo), `batch.js`, `uploaded.js` y `batch-upload.js` (Varios capítulos), `download.js`,
-    `import.js`, `newwork.js`, `newwork-alt.js` (obra nueva en Crimson y Mangation), `also.js` («También a…»),
+    capítulo), `batch.js`, `uploaded.js` y `batch-upload.js` (Varios capítulos), `joints.js` (barra y ventana de los joints),
+    `download.js`, `import.js`, `newwork.js`, `newwork-alt.js` (obra nueva en Crimson y Mangation), `also.js` («También a…»),
     `update.js`, `settings.js` (Ajustes), `diagnostics.js`, `views.js` y `boot.js`, que inicia todo al final.
   - `whatsnew.html` con `js/whatsnew-window.js` y `css/whatsnew.css` es la ventana de novedades, aparte de la
     principal.
   - `css/` en el orden de la cascada: base, componentes, subir, el estilo Capibara, Mis scans, grupos,
-    secciones, capítulos subidos, obra nueva, diagnóstico, plataformas y los temas de Crimson y Mangation.
+    secciones, capítulos subidos, joints, obra nueva, diagnóstico, plataformas y los temas de Crimson y Mangation.
 - `src/scraper/` — motor de HaruNeko compilado (Unlicense, ver `HARUNEKO-UNLICENSE`) y su ventana.
 - `scripts/` — `build-scraper.mjs` compila el motor, `build-icon.cjs` genera los íconos,
   `build-installer-art.cjs` las imágenes del instalador y `check.cjs` revisa la sintaxis.
 - `build/` — íconos, imágenes del instalador e `installer.nsh` (páginas y textos del asistente).
 - `test/` — pruebas con `node:test`.
 - `vendor/psdc/` — conversor de PSD (MIT) que se incluye en el instalador.
+- `node_modules/7z-wasm/` — 7-Zip para los comprimidos (LGPL + restricción de unRAR); va fuera del `.asar`
+  (`asarUnpack`) porque lo carga un hilo aparte.

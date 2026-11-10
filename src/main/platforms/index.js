@@ -10,6 +10,7 @@
  *   - antes de subir a una plataforma secundaria se mira (con caché corta) si el capítulo ya estaba.
  */
 const api = require('../api')
+const joints = require('../joints')
 const capibaraUpload = require('../upload')
 const crimson = require('./crimson')
 const mangation = require('./mangation')
@@ -42,13 +43,25 @@ const sessions = () => ({ crimson: crimson.status(), mangation: mangation.status
 
 /* ---------- Lecturas ---------- */
 
+/** Capibara: las obras del scan y, después, los joints donde es miembro (si fallan, solo las obras). */
+async function capibaraWorks(key) {
+  const [own, shared] = await Promise.all([
+    api.requestAll(key, '/works?limit=50'),
+    joints.list(key).catch((err) => { diagnostics.warn('joints', `No se pudieron leer los joints: ${err.message}`); return [] }),
+  ])
+  return [...own, ...shared]
+}
+
 async function works(platform, key) {
-  if (assertId(platform) === 'capibara') return api.requestAll(key(), '/works?limit=50')
+  if (assertId(platform) === 'capibara') return capibaraWorks(key())
   return remote[platform].withSession((s, user) => remote[platform].listWorks(s, user))
 }
 
 async function chapters(platform, workId, key) {
-  if (assertId(platform) === 'capibara') return api.requestAll(key(), `/works/${Number(workId)}/chapters?limit=100&order=desc`)
+  if (assertId(platform) === 'capibara') {
+    if (joints.isJointId(workId)) return joints.chapters(key(), workId)
+    return api.requestAll(key(), `/works/${Number(workId)}/chapters?limit=100&order=desc`)
+  }
   const list = await remote[platform].withSession((s) => remote[platform].listChapters(s, String(workId)))
   rememberExisting(platform, workId, list)
   return list
@@ -197,7 +210,9 @@ async function upload(payload, { key, signal, onProgress = () => {} }) {
     const report = mixer.for(platform, { convertShare: convertShareOf(platform) })
     if (platform === 'capibara') {
       mixer.status(platform, 'uploading')
-      const data = await capibaraUpload.uploadChapter(key(), { workId: t.workId, chapter, files: entries }, { signal, onProgress: report })
+      // Capibara usa ids numéricos; un joint llega como «joint:<id>».
+      const workId = joints.isJointId(t.workId) ? t.workId : Number(t.workId)
+      const data = await capibaraUpload.uploadChapter(key(), { workId, chapter, files: entries }, { signal, onProgress: report })
       return data
     }
     if (chapter.extra) {

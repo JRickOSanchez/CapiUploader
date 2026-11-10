@@ -19,6 +19,8 @@ function workMeta(work) {
     count && work.type ? el('span', { class: 'sep' }) : null,
     work.type ? el('span', { text: TYPE_LABEL[work.type] || work.type }) : null,
   )
+  if (work.joint) meta.prepend(el('span', { class: 'tag joint', text: 'Joint', title: `Obra en conjunto con otros scans · tu rol: ${work.joint.roleText}` }))
+  if (work.joint && !work.joint.canUpload) meta.append(el('span', { class: 'tag private', text: 'Solo ver' }))
   if (work.adult) meta.append(el('span', { class: 'tag private', text: '+18' }))
   if (work.inReview) meta.append(el('span', { class: 'tag review', text: 'En revisión' }))
   else if (work.isPublic === false || work.hidden) meta.append(el('span', { class: 'tag private', text: work.hidden ? 'Oculta' : 'Privada' }))
@@ -275,6 +277,7 @@ function renderWorkInfo() {
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Programados' }),
       el('div', { class: 'stat-value', text: scheduled ? formatNumber(scheduled) : 'Ninguno' })),
   )
+  if (isJointWork(w) && !isImportWindow) box.append(jointBar(w))
 }
 
 const workById = (id) => (id == null ? null : state.works.find((w) => w.id === id) || null)

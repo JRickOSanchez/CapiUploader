@@ -14,7 +14,7 @@ async function addPaths(paths) {
   addResolved(res.data)
 }
 
-function addResolved({ files, skipped, psd }) {
+function addResolved({ files, skipped, problems, psd }) {
   const existing = new Set(state.files.map((f) => f.path))
   const fresh = files.filter((f) => !existing.has(f.path))
   const dupes = files.length - fresh.length
@@ -24,10 +24,11 @@ function addResolved({ files, skipped, psd }) {
   state.files.push(...accepted.map((f) => ({ ...f, id: ++fileSeq, status: null })))
   if (wasEmpty) state.files.sort((a, b) => naturalCompare(a.name, b.name))
 
-  if (skipped.length) toast('warn', `${skipped.length} archivo(s) ignorado(s)`, `Solo se aceptan JPG, PNG, WEBP, GIF, AVIF y PSD. ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '…' : ''}`)
+  if (skipped.length) toast('warn', `${skipped.length} archivo(s) ignorado(s)`, `Solo se aceptan JPG, PNG, WEBP, GIF, AVIF, PSD y comprimidos (ZIP, CBZ, RAR, CBR, 7Z…). ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '…' : ''}`)
   if (dupes) toast('info', `${dupes} imagen(es) ya estaban en la lista`)
   if (fresh.length > accepted.length) toast('warn', 'Límite de páginas', `Un capítulo admite como máximo ${MAX_PAGES} páginas.`)
-  if (!files.length && !skipped.length) toast('warn', 'No se encontraron imágenes')
+  if (!files.length && !skipped.length && !problems?.length) toast('warn', 'No se encontraron imágenes')
+  reportArchiveProblems(problems)
   reportPsd(psd)
   renderThumbs()
   validate()
@@ -344,6 +345,7 @@ function validate() {
   const show = state.attempted
 
   if (!state.selectedWork) errors.work = 'Selecciona una obra.'
+  else if (!canUploadTo(state.selectedWork)) errors.work = JOINT_VIEWER_TEXT
 
   // Número (los extras llevan su propia numeración)
   const existing = usedNumbers(state.chapters, form.extra)
@@ -353,7 +355,7 @@ function validate() {
   if (form.number == null || Number.isNaN(form.number)) errors.number = form.extra ? 'Indica el número del extra.' : 'Indica el número del capítulo.'
   else if (form.number < 0) errors.number = 'El número no puede ser negativo.'
   else if (form.number >= EXTRA_BASE) errors.number = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`
-  else if (existing.has(form.number)) errors.number = `${form.extra ? 'El extra' : 'El capítulo'} ${form.number} ya existe en esta obra.`
+  else if (existing.has(form.number)) errors.number = `${form.extra ? 'El extra' : 'El capítulo'} ${form.number} ya existe en ${isJointWork(state.selectedWork) ? 'este joint' : 'esta obra'}.`
   if (errors.number && (show || existing.has(form.number))) setHint('#chNumberHint', errors.number, 'error')
   else if (form.number != null && state.autoNumber && form.extra) setHint('#chNumberHint', 'Sugerido: siguiente extra. Se muestra como «Extra N».', '')
   else if (form.number != null && state.autoNumber && state.chapters.length) setHint('#chNumberHint', 'Sugerido: siguiente al último publicado.', '')
@@ -590,6 +592,7 @@ async function startUpload() {
   showDone(res.data, form, work)
   if (res.data.results) toast('success', 'Subido a todas las plataformas', resultsText(res.data.results), 8000)
   warnSingles(res.data.singleCheck, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
+  noteJointResult(work, res.data, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
   state.chapters.push({ number: res.data.number ?? form.number, extra: form.extra, extraNumber: form.extra ? form.number : null, volumeNumber: form.volumeNumber, state: res.data.state })
   loadChapters()
 }

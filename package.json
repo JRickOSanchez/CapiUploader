@@ -1,7 +1,7 @@
 {
   "name": "capi-uploader",
   "productName": "CapiUploader",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Sube capítulos de manga a Capibara Traductor mediante su API.",
   "main": "src/main/main.js",
   "author": "SenshiManga",
@@ -22,6 +22,9 @@
     "files": [
       "src/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/7z-wasm/**"
     ],
     "directories": {
       "output": "dist",
@@ -113,6 +116,7 @@
     "protobufjs": "^8.8.1"
   },
   "dependencies": {
+    "7z-wasm": "^1.2.0",
     "electron-updater": "^6.8.11"
   }
 }

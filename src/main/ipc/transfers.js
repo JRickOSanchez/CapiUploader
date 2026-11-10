@@ -14,6 +14,7 @@ const { downloadChapters } = require('../download')
 const { handle, requireKey, tasks } = require('./core')
 
 const FORMATS = ['original', 'jpg', 'png']
+const PACKS = ['folder', 'cbz', 'zip']
 // Solo se abren en el explorador carpetas creadas por una descarga.
 const openableDirs = new Set()
 
@@ -47,7 +48,7 @@ function registerDownload() {
     return res.filePaths[0]
   })
 
-  handle('download:start', async ({ work, chapters, dest, format } = {}) => {
+  handle('download:start', async ({ work, chapters, dest, format, pack } = {}) => {
     if (!work?.id || !Array.isArray(chapters) || !chapters.length) throw new Error('Elige los capítulos a descargar.')
     const key = requireKey()
     const list = chapters.map((c) => ({
@@ -62,6 +63,7 @@ function registerDownload() {
         chapters: list,
         dest: typeof dest === 'string' && path.isAbsolute(dest) ? dest : defaultDownloadDir(),
         format: FORMATS.includes(format) ? format : 'jpg',
+        pack: PACKS.includes(pack) ? pack : 'folder',
         signal,
         onProgress: (p) => {
           if (p.dir) openableDirs.add(p.dir)

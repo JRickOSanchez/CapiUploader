@@ -65,6 +65,13 @@ contextBridge.exposeInMainWorld('capi', {
     install: () => invoke('update:install'),
     onState: (cb) => ipcRenderer.on('update:state', (_e, s) => cb(s)),
   },
+  // Joints: versiones de cada número (cuál se muestra) y papelera. id: «joint:<id>».
+  joint: {
+    view: (id) => invoke('joint:view', id),
+    trash: (id) => invoke('joint:trash', id),
+    show: (id, number, chapterId) => invoke('joint:show', id, number, chapterId),
+    release: (id, number) => invoke('joint:release', id, number),
+  },
   // Arreglos de un capítulo ya subido.
   chapter: {
     setNumber: (chapterId, number) => invoke('chapter:setNumber', chapterId, number),
@@ -77,9 +84,12 @@ contextBridge.exposeInMainWorld('capi', {
     resolve: (paths) => invoke('files:resolve', paths),
     pick: (mode) => invoke('files:pick', mode),
     resolveChapters: (paths) => invoke('files:resolveChapters', paths),
-    pickChapters: () => invoke('files:pickChapters'),
+    // mode 'archives': elegir comprimidos en vez de carpetas.
+    pickChapters: (mode) => invoke('files:pickChapters', mode),
     // Avance de la conversión de PSD: { done, total } y al final { finished: true }.
     onPsdProgress: (cb) => ipcRenderer.on('psd:progress', (_e, p) => cb(p)),
+    // Avance al abrir comprimidos: { name, percent } y al final { finished: true }.
+    onArchiveProgress: (cb) => ipcRenderer.on('archive:progress', (_e, p) => cb(p)),
   },
   // Registro de diagnóstico (Ajustes → Diagnóstico).
   diagnostics: {

@@ -6,6 +6,8 @@ const fs = require('node:fs/promises')
 const { dialog } = require('electron')
 const api = require('../api')
 const works = require('../works')
+const joints = require('../joints')
+const platforms = require('../platforms')
 const mainWindow = require('../window')
 const { describeFile, MAX_IMAGE_BYTES, IMAGE_EXTS } = require('../files')
 const { handle, requireKey } = require('./core')
@@ -32,8 +34,15 @@ async function pickWorkImage(kind) {
 
 function register() {
   handle('api:me', async () => (await api.request(requireKey(), 'GET', '/me')).data)
-  handle('api:works', async () => api.requestAll(requireKey(), '/works?limit=50'))
-  handle('api:chapters', async (workId) => api.requestAll(requireKey(), `/works/${Number(workId)}/chapters?limit=100&order=desc`))
+  // Obras del scan y joints donde es miembro (id «joint:<id>»).
+  handle('api:works', async () => platforms.works('capibara', requireKey))
+  handle('api:chapters', async (workId) => platforms.chapters('capibara', workId, requireKey))
+
+  // Joints: versiones de cada número, papelera y qué versión se muestra.
+  handle('joint:view', async (id) => joints.view(requireKey(), id))
+  handle('joint:trash', async (id) => joints.trash(requireKey(), id))
+  handle('joint:show', async (id, number, chapterId) => joints.showVersion(requireKey(), id, number, chapterId))
+  handle('joint:release', async (id, number) => joints.releaseVersion(requireKey(), id, number))
 
   handle('chapter:setNumber', async (chapterId, number) => {
     const n = Number(number)

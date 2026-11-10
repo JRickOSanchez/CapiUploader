@@ -5,6 +5,7 @@
 const { app, BrowserWindow } = require('electron')
 const store = require('./store')
 const psd = require('./psd')
+const archives = require('./archives')
 const webp = require('./webp')
 const scrape = require('./scrape')
 const importer = require('./importer')
@@ -47,6 +48,7 @@ function openMainWindow() {
 app.whenReady().then(() => {
   const userData = app.getPath('userData')
   psd.init(userData).catch(() => {})
+  archives.init(userData).catch(() => {})
   importer.init(userData).catch(() => {})
   migrateLegacy()
   const win = openMainWindow()

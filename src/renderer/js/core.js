@@ -113,6 +113,33 @@ function initPsdProgress() {
   })
 }
 
+/* Comprimidos: avance al descomprimir y los que no se pudieron abrir. */
+let archiveBusy = null
+function initArchiveProgress() {
+  window.capi.files.onArchiveProgress((p) => {
+    if (p.finished) {
+      if (archiveBusy) { archiveBusy.classList.add('out'); const n = archiveBusy; setTimeout(() => n.remove(), 200); archiveBusy = null }
+      return
+    }
+    if (!archiveBusy) {
+      archiveBusy = el('div', { class: 'toast info psd-busy' },
+        el('span', { html: ICONS.spinner }),
+        el('div', {}, el('div', { class: 'toast-title', text: 'Descomprimiendo…' }), el('div', { class: 'toast-msg' })),
+      )
+      $('#toasts').append(archiveBusy)
+    }
+    archiveBusy.querySelector('.toast-msg').textContent = `${p.name}${p.percent ? ` · ${p.percent}%` : ''}`
+  })
+}
+
+/** problems: [{ name, message }] de los comprimidos que no se pudieron abrir. */
+function reportArchiveProblems(problems) {
+  if (!problems?.length) return
+  const first = problems[0]
+  toast('error', problems.length === 1 ? `No se pudo abrir ${first.name}` : `No se pudieron abrir ${problems.length} comprimidos`,
+    problems.length === 1 ? first.message : problems.slice(0, 3).map((p) => `${p.name}: ${p.message}`).join(' · ') + (problems.length > 3 ? '…' : ''), 10000)
+}
+
 /** Avisa de lo que pasó al convertir PSD: fuentes que faltan y archivos que no se pudieron leer. */
 function reportPsd(report) {
   if (!report) return

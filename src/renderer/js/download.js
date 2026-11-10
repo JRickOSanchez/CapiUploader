@@ -26,7 +26,8 @@ const dlChosen = () => dlChapters().filter((c) => dl.selected.has(c.id))
 
 function dlFilteredWorks() {
   const q = normTitle($('#dlWorkSearch').value)
-  return state.works.filter((w) => !q || normTitle(`${w.title} ${w.alternativeTitle || ''} ${w.slug}`).includes(q))
+  // Los joints no se descargan desde aquí (sus capítulos son de varios scans).
+  return state.works.filter((w) => !isJointWork(w)).filter((w) => !q || normTitle(`${w.title} ${w.alternativeTitle || ''} ${w.slug}`).includes(q))
 }
 
 function renderDlWorks() {
@@ -192,6 +193,7 @@ function setDlRunningUI(on) {
   $('#dlCancelBtn').hidden = !on
   $('#dlPickDest').disabled = on
   $('#dlFormat').disabled = on
+  $('#dlPack').disabled = on
   setViewBusy('download', on)
   renderDlList()
 }
@@ -235,6 +237,7 @@ async function dlStart() {
     })),
     dest: dl.dest,
     format: $('#dlFormat').value,
+    pack: $('#dlPack').value,
   })
   unsubscribe()
   for (const [id, row] of dl.rows) if (row.status === 'queued' || row.status === 'downloading') dl.rows.delete(id)
@@ -342,5 +345,9 @@ function initDownload() {
   })
   $('#dlFormat').value = localStorage.getItem('dlFormat') || 'jpg'
   $('#dlFormat').addEventListener('change', (e) => localStorage.setItem('dlFormat', e.target.value))
+  // Carpeta, CBZ o ZIP (se recuerda; si lo guardado ya no es una opción, queda «carpeta»).
+  $('#dlPack').value = localStorage.getItem('dlPack') || 'folder'
+  if (!$('#dlPack').value) $('#dlPack').value = 'folder'
+  $('#dlPack').addEventListener('change', (e) => localStorage.setItem('dlPack', e.target.value))
   renderDlDest()
 }

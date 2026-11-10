@@ -94,7 +94,8 @@ function matchWork(folderName) {
       let sc = similarity(n, m)
       // «Kirara» dentro de «Kirara Hoshikita quiere brillar»
       if (n.length >= 4 && m.length >= 4 && (m.includes(n) || n.includes(m))) sc = Math.max(sc, 0.62 + 0.38 * (Math.min(n.length, m.length) / Math.max(n.length, m.length)))
-      if (sc > score) { score = sc; best = w }
+      // Si una obra propia y un joint se parecen igual, gana la obra propia (el joint se elige a mano).
+      if (sc > score || (sc === score && best?.joint && !w.joint)) { score = sc; best = w }
     }
   }
   if (score >= 0.85) return { work: best, sure: true, score }

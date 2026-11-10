@@ -1,0 +1,39 @@
+/* =========================================================
+   Joints: etiqueta, barra bajo la obra y ventana de versiones
+   ========================================================= */
+.tag.joint { background: var(--accent-soft); color: var(--accent-text); }
+
+.joint-bar {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.joint-bar.viewer { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.joint-role { color: var(--text-2); font-weight: 600; }
+.joint-warn { color: var(--warning); font-weight: 600; }
+
+.joint-card .modal-head { margin-bottom: 12px; }
+.joint-tools { display: flex; align-items: center; gap: 8px; }
+.joint-tools .chips { padding: 0; border: 0; }
+.joint-help { font-size: 12.5px; margin: 10px 0; }
+.joint-body { flex: 1; min-height: 0; overflow-y: auto; }
+.joint-empty { padding: 28px 8px; text-align: center; }
+.joint-note { font-size: 12px; margin: 0 0 8px; }
+
+.joint-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.joint-row { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.joint-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; }
+.joint-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.joint-row.trash .joint-note { margin: 6px 0 0; }
+
+.jv-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.jv {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px;
+  padding: 6px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border);
+}
+.jv.shown { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.jv-scan { font-weight: 650; }
+.jv-meta { color: var(--text-3); font-size: 12px; }
+.jv-shown { color: var(--success); font-weight: 700; font-size: 11.5px; margin-left: auto; }
+.jv .btn { margin-left: auto; }
+.jv-shown + .btn { margin-left: 0; }

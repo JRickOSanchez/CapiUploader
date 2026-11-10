@@ -3,7 +3,8 @@
  *   1. vuelve a leer cada archivo (tamaño exacto);
  *   2. pide URLs firmadas en lotes de 100 (POST /uploads);
  *   3. sube cada imagen con PUT directo al almacenamiento (4 en paralelo);
- *   4. crea el capítulo (POST /works/:id/chapters) con las claves en orden de lectura;
+ *   4. crea el capítulo (POST /works/:id/chapters, o /joints/:id/chapters en un joint) con las
+ *      claves en orden de lectura;
  *   5. revisa las páginas simples y corrige las que no hayan quedado marcadas.
  * Las claves ya subidas se recuerdan 45 min: si falla la creación (p. ej. número repetido), al
  * reintentar no se vuelven a subir las imágenes. Pasado ese plazo se borran solas, y al terminar una
@@ -12,6 +13,7 @@
 const path = require('node:path')
 const fs = require('node:fs/promises')
 const api = require('./api')
+const joints = require('./joints')
 const { describeFile, MAX_IMAGE_BYTES } = require('./files')
 const { pool, cancelled: cancelledError } = require('./util')
 const diagnostics = require('./diagnostics')
@@ -55,7 +57,7 @@ async function readFiles(paths) {
   return files
 }
 
-/** Cuerpo de POST /works/:id/chapters a partir de lo que manda la interfaz. */
+/** Cuerpo de POST /works/:id/chapters (o /joints/:id/chapters) a partir de lo que manda la interfaz. */
 function chapterBody(chapter, keys, singles) {
   const body = { number: chapter.number, pages: keys.map((k, i) => (singles[i] ? { key: k, single: true } : k)) }
   if (chapter.title) body.title = chapter.title
@@ -70,7 +72,7 @@ function chapterBody(chapter, keys, singles) {
 }
 
 /**
- * Sube el capítulo. payload: { workId, chapter, files }. onProgress recibe las fases
+ * Sube el capítulo. payload: { workId, chapter, files }; workId «joint:<id>» sube a ese joint. onProgress recibe las fases
  * (prepare, upload, sign, file, create, verify, done). Devuelve el capítulo creado con singleCheck.
  */
 async function uploadChapter(key, payload, { signal, onProgress = () => {} }) {
@@ -81,7 +83,7 @@ async function uploadChapter(key, payload, { signal, onProgress = () => {} }) {
 
     onProgress({ phase: 'prepare' })
     const started = Date.now()
-    const label = `${chapter.extra ? 'Extra' : 'Cap'} ${chapter.number} → obra ${Number(workId)}`
+    const label = `${chapter.extra ? 'Extra' : 'Cap'} ${chapter.number} → ${joints.isJointId(workId) ? `joint ${joints.jointNumber(workId)}` : `obra ${Number(workId)}`}`
     const files = await readFiles(entries.map((e) => e.path))
     diagnostics.info('subida', `${label}: ${files.length} páginas`)
     pruneKeys()
@@ -144,10 +146,12 @@ async function uploadChapter(key, payload, { signal, onProgress = () => {} }) {
     }
     onProgress({ phase: 'done' })
     diagnostics.info('subida', `${label}: creado (id ${created.data?.id}) en ${Math.round((Date.now() - started) / 1000)} s`)
+    // Joint: si el número ya estaba ocupado, el capítulo quedó en la ficha del scan como otra versión.
+    if (created.data?.quedoEnFicha) diagnostics.warn('subida', `${label}: el número ya era de ${created.data.ocupadoPor || 'otro scan'}; quedó en la ficha del scan.`)
     return { ...created.data, singleCheck }
   } catch (err) {
     if (signal.aborted && err.code !== 'cancelled') throw cancelled()
-    throw err
+    throw joints.explainUploadError(err)
   }
 }
 
@@ -156,12 +160,14 @@ async function uploadChapter(key, payload, { signal, onProgress = () => {} }) {
  * existe, es que el primero sí llegó: se busca y se devuelve como creado en vez de dar un error falso.
  */
 async function createChapter(key, workId, body, signal) {
-  const path = `/works/${Number(workId)}/chapters`
+  const path = joints.chaptersPath(workId)
   try {
     return await api.request(key, 'POST', path, body, signal)
   } catch (err) {
     if (err.code !== 'api.chapter_exists' || !err.retried) throw err
-    const list = await api.requestAll(key, `${path}?limit=100&order=desc`, signal).catch(() => [])
+    const list = await (joints.isJointId(workId)
+      ? joints.chapters(key, workId, signal)
+      : api.requestAll(key, `${path}?limit=100&order=desc`, signal)).catch(() => [])
     const same = (c) => (body.extra
       ? (c.extra || Number(c.number) >= 100000) && Number(c.extraNumber ?? Number(c.number) - 100000) === Number(body.number)
       : Number(c.number) === Number(body.number))
