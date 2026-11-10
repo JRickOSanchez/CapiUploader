@@ -49,7 +49,7 @@ En la misma ventana de la cuenta:
 - **Grupos de scanlation:** busca cada grupo por su nombre o pega su enlace de MangaDex, y elígelo. Las reglas piden marcar **todos los grupos que trabajaron** el capítulo, así que agrega todos con los que trabajas (hasta 10). Para quitar uno, usa la ✕ junto a su nombre.
 - **Si no tienes grupo**, crea en MangaDex un grupo con **tu nombre de usuario** y elígelo aquí.
 - **«Sin grupo»** solo aparece si no hay ningún grupo elegido, y solo debes marcarlo si eres **el autor** de la obra o **un traductor autorizado** por él.
-- **Idioma de tus traducciones:** Español (Latinoamérica) por defecto. Cámbialo si traduces a otro.
+- **Idioma predeterminado de tus traducciones:** Español (Latinoamérica) por defecto. Es el que viene elegido en cada capítulo; si tu grupo traduce a varios idiomas, cada capítulo puede ir en otro (ver «4. Agregar el capítulo»).
 - **Reglas:** marca la casilla de que leíste y aceptas las **reglas** y los **términos de subida** de MangaDex. Sin esa casilla la app no sube nada, porque cada subida le dice a MangaDex que tu cuenta los acepta. El enlace «reglas» abre la **traducción completa** dentro de la app.
 
 Pulsa **Guardar**. Puedes volver a esta ventana cuando quieras desde el chip de tu cuenta, arriba a la derecha.
@@ -59,7 +59,7 @@ Pulsa **Guardar**. Puedes volver a esta ventana cuando quieras desde el chip de 
 - En **«Elige la obra»** aparecen solas las obras de **tus grupos**.
 - Si la obra no está en la lista, usa **«Agregar obra»**: búscala por título o pega su enlace (`https://mangadex.org/title/…`). Queda guardada en tu lista.
 - **Solo se puede subir a obras que ya existen en MangaDex.** La app no crea obras nuevas allí.
-- Debajo de la obra ves el último capítulo y cuántos hay. Solo cuentan los de **tus grupos** (o los de tu cuenta, sin grupo) **en tu idioma**.
+- Debajo de la obra ves el último capítulo y cuántos hay. Solo cuentan los de **tus grupos** (o los de tu cuenta, sin grupo) **en el idioma elegido para el capítulo**.
 
 ## 4. Agregar el capítulo
 
@@ -69,6 +69,7 @@ Pulsa **Guardar**. Puedes volver a esta ventana cuando quieras desde el chip de 
 - **Tomo:** solo si el capítulo **ya salió publicado en un tomo**. Con MangaDex la app no lo rellena sola con el del capítulo anterior, porque las reglas piden no adivinarlo. En obras por **temporadas**, la temporada va como tomo.
 - **Título:** si el capítulo no tiene título, déjalo vacío. No agregues «[HQ]», «v2» ni otros descriptores; la app no deja subir si los encuentra. Solo se permiten «Censored» o «Uncensored».
 - **Partes:** no juntes varios capítulos en uno, y pártelo solo si la obra original también viene partida. Usa decimales (12.5) para partes y extras.
+- **Idioma de cada capítulo:** en «Un capítulo» está el campo **«Idioma del capítulo (MangaDex)»**, y en «Varios capítulos» cada fila tiene el suyo (ES-LA, ES, EN, PT-BR). Viene elegido el de tu cuenta; cámbialo si ese capítulo es de otra traducción. En MangaDex **el 12 en español y el 12 en inglés son capítulos distintos**: el número siguiente, los «ya existe» y los repetidos se revisan **por idioma**.
 - MangaDex **no tiene extras** ni páginas simples o destacada, así que esas opciones no aparecen.
 
 **Las páginas se ajustan solas a lo que acepta MangaDex**, que pide JPG, PNG o GIF de hasta 20 MB y 10 000 × 10 000 px:

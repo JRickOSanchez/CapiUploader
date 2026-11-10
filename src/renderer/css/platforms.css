@@ -113,6 +113,9 @@ body.uploading .also-btn { pointer-events: none; opacity: .6; }
 .account-form { display: flex; flex-direction: column; gap: 12px; }
 
 /* ---------- MangaDex: cliente de la API, grupo, reglas y obras agregadas ---------- */
+/* El idioma de cada capítulo solo se ve cuando la subida va a MangaDex (body.to-mangadex). */
+body:not(.to-mangadex) .mdx-only { display: none !important; }
+.ch-field.ch-lang select { height: 34px; padding: 0 26px 0 8px; font-size: 12px; font-weight: 700; background-position: calc(100% - 13px) 15px, calc(100% - 8px) 15px; }
 .account-mdx { display: flex; flex-direction: column; gap: 12px; }
 .account-mdx[hidden] { display: none; }
 .account-card:has(.account-mdx:not([hidden])) { max-height: calc(100vh - 48px); overflow-y: auto; }

@@ -329,6 +329,8 @@ function readForm() {
     schedule,
     notify: $('#notifyToggle').checked,
     extra: $('#extraToggle').checked,
+    // Idioma para MangaDex (solo si la subida va allí).
+    lang: document.body.classList.contains('to-mangadex') ? currentMdxLang() : null,
   }
 }
 
@@ -340,6 +342,7 @@ function setHint(id, text, kind = '') {
 
 function validate() {
   if (state.mode === 'batch') return batchValidate()
+  syncMdxTarget()
   const form = readForm()
   const errors = {}
   const show = state.attempted
@@ -348,14 +351,15 @@ function validate() {
   else if (!canUploadTo(state.selectedWork)) errors.work = JOINT_VIEWER_TEXT
 
   // Número (los extras llevan su propia numeración)
-  const existing = usedNumbers(state.chapters, form.extra)
+  // MangaDex: solo cuentan los capítulos en el mismo idioma.
+  const existing = usedNumbers(chaptersInLang(state.chapters, form.lang), form.extra)
   // Reintento de una subida a varias que ya quedó en la plataforma activa: no cuenta como repetido.
   if (single.doneOn.has(state.platform)) existing.delete(form.number)
   $('#chNumberLabel').textContent = form.extra ? 'Número del extra' : 'Número de capítulo'
   if (form.number == null || Number.isNaN(form.number)) errors.number = form.extra ? 'Indica el número del extra.' : 'Indica el número del capítulo.'
   else if (form.number < 0) errors.number = 'El número no puede ser negativo.'
   else if (form.number >= EXTRA_BASE) errors.number = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`
-  else if (existing.has(form.number)) errors.number = `${form.extra ? 'El extra' : 'El capítulo'} ${form.number} ya existe en ${isJointWork(state.selectedWork) ? 'este joint' : 'esta obra'}.`
+  else if (existing.has(form.number)) errors.number = `${form.extra ? 'El extra' : 'El capítulo'} ${form.number} ya existe en ${isJointWork(state.selectedWork) ? 'este joint' : 'esta obra'}${state.platform === 'mangadex' && form.lang ? ` en ${mdxLangName(form.lang)}` : ''}.`
   if (errors.number && (show || existing.has(form.number))) setHint('#chNumberHint', errors.number, 'error')
   else if (form.number != null && state.autoNumber && form.extra) setHint('#chNumberHint', 'Sugerido: siguiente extra. Se muestra como «Extra N».', '')
   else if (form.number != null && state.autoNumber && state.chapters.length) setHint('#chNumberHint', 'Sugerido: siguiente al último publicado.', '')
@@ -565,6 +569,7 @@ async function startUpload() {
       notify: form.notify,
       announcePage: announcePageFor(state.files),
       extra: form.extra,
+      lang: form.lang,
     },
   })
   unsubscribe()
@@ -599,7 +604,7 @@ async function startUpload() {
   warnSingles(res.data.singleCheck, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
   noteJointResult(work, res.data, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
   noteMdxReview(res.data, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
-  state.chapters.push({ number: res.data.number ?? form.number, extra: form.extra, extraNumber: form.extra ? form.number : null, volumeNumber: form.volumeNumber, state: res.data.state })
+  state.chapters.push({ number: res.data.number ?? form.number, extra: form.extra, extraNumber: form.extra ? form.number : null, volumeNumber: form.volumeNumber, state: res.data.state, lang: res.data.lang || form.lang || null })
   loadChapters()
 }
 

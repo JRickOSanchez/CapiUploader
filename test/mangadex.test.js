@@ -163,7 +163,7 @@ test('MangaDex: obras del grupo y agregadas, sin repetir; capítulos del grupo e
     if (u.pathname === '/manga' && u.searchParams.getAll('ids[]').length) return { body: { result: 'ok', data: u.searchParams.getAll('ids[]').map((id) => work(id, 'Otra')), total: 2 } }
     if (u.pathname === '/chapter') {
       return { body: { result: 'ok', total: 2, data: [
-        { id: uuid(1), attributes: { chapter: '12', volume: '2', title: 'T', pages: 20, publishAt: '2020-01-01T00:00:00+00:00' } },
+        { id: uuid(1), attributes: { chapter: '12', volume: '2', title: 'T', pages: 20, translatedLanguage: 'es-la', publishAt: '2020-01-01T00:00:00+00:00' } },
         { id: uuid(2), attributes: { chapter: null, title: 'Oneshot', pages: 5 } },
       ] } }
     }
@@ -180,7 +180,8 @@ test('MangaDex: obras del grupo y agregadas, sin repetir; capítulos del grupo e
     assert.deepEqual(ch.map((c) => [c.number, c.volumeNumber, c.state]), [[12, 2, 'published']])
     const q = new URL(srv.calls.find((c) => c.url.startsWith('/chapter')).url, 'http://x').searchParams
     assert.equal(q.get('manga'), MANGA)
-    assert.deepEqual(q.getAll('translatedLanguage[]'), ['es-la'])
+    assert.deepEqual(q.getAll('translatedLanguage[]'), [], 'se piden todos los idiomas: cada capítulo trae el suyo')
+    assert.equal(ch[0].lang, 'es-la')
     assert.deepEqual(q.getAll('groups[]'), [GROUP])
     assert.equal(q.get('uploader'), null)
     // Sin grupo: lo subido por la cuenta.
@@ -309,4 +310,18 @@ test('MangaDex (reglas): hasta 300 MB por capítulo; la primera beta con un solo
   const s = mangadex.setSettings({ groups: [], noGroup: true })
   assert.deepEqual([s.groups, s.noGroup], [[], true])
   assert.equal(mangadex.setSettings({ groups: [{ id: GROUP, name: 'A' }] }).noGroup, false, '«Sin grupo» se apaga al elegir un grupo')
+})
+
+test('MangaDex: cada capítulo puede ir en su idioma; sin idioma va el de la cuenta', async () => {
+  const srv = await server(uploadApi())
+  try {
+    const en = await mangadex.uploadChapter('tok', { settings: SETTINGS, workId: MANGA, chapter: { number: 3, lang: 'en' }, files: await pages(1) })
+    assert.equal(en.lang, 'en')
+    const commits = () => srv.calls.filter((c) => c.url.endsWith('/commit')).map((c) => JSON.parse(c.body).chapterDraft.translatedLanguage)
+    const approvals = () => srv.calls.filter((c) => c.url === '/upload/check-approval-required').map((c) => JSON.parse(c.body).locale)
+    await mangadex.uploadChapter('tok', { settings: SETTINGS, workId: MANGA, chapter: { number: 4 }, files: await pages(1) })
+    await mangadex.uploadChapter('tok', { settings: SETTINGS, workId: MANGA, chapter: { number: 5, lang: 'klingon' }, files: await pages(1) })
+    assert.deepEqual(commits(), ['en', 'es-la', 'es-la'], 'un idioma que no está en la lista usa el de la cuenta')
+    assert.deepEqual(approvals(), ['en', 'es-la', 'es-la'], 'la revisión del staff se consulta en el idioma del capítulo')
+  } finally { await srv.close() }
 })

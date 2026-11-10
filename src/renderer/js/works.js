@@ -236,7 +236,7 @@ async function loadChapters() {
 }
 
 function latestChapter() {
-  return regularOnly(state.chapters).reduce((best, c) => (!best || c.number > best.number ? c : best), null)
+  return regularOnly(chaptersInLang(state.chapters, currentMdxLang())).reduce((best, c) => (!best || c.number > best.number ? c : best), null)
 }
 
 function latestExtraNumber(list) {
@@ -270,13 +270,15 @@ function renderWorkInfo() {
     return
   }
   const last = latestChapter()
-  const scheduled = state.chapters.filter((c) => c.state === 'scheduled').length
-  const extras = extrasOnly(state.chapters).length
+  // MangaDex: las cifras son del idioma elegido para el capítulo.
+  const shown = chaptersInLang(state.chapters, currentMdxLang())
+  const scheduled = shown.filter((c) => c.state === 'scheduled').length
+  const extras = extrasOnly(shown).length
   box.append(
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Último cap.' }),
       el('div', { class: 'stat-value', text: last ? `#${last.number}${last.volumeNumber != null ? ` · Vol. ${last.volumeNumber}` : ''}` : '—' })),
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Capítulos' }),
-      el('div', { class: 'stat-value', text: `${formatNumber(state.chapters.length - extras)}${extras ? ` · ${extras} extra${extras === 1 ? '' : 's'}` : ''}` })),
+      el('div', { class: 'stat-value', text: `${formatNumber(shown.length - extras)}${extras ? ` · ${extras} extra${extras === 1 ? '' : 's'}` : ''}` })),
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Programados' }),
       el('div', { class: 'stat-value', text: scheduled ? formatNumber(scheduled) : 'Ninguno' })),
   )

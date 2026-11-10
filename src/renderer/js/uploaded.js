@@ -32,7 +32,8 @@ function saveUploaded() {
  * Un «Ya estaba publicado» no reemplaza al registro de cuando lo subió el programa.
  */
 function pushUploaded(entry) {
-  const same = (e) => e.workId === entry.workId && e.number === entry.number && Boolean(e.extra) === Boolean(entry.extra)
+  // MangaDex: el mismo número en otro idioma es otro capítulo.
+  const same = (e) => e.workId === entry.workId && e.number === entry.number && Boolean(e.extra) === Boolean(entry.extra) && (e.lang || null) === (entry.lang || null)
   if (entry.kind === 'existing' && batch.uploaded.some((e) => same(e) && e.kind === 'uploaded')) return
   batch.uploaded = batch.uploaded.filter((e) => !same(e))
   batch.uploaded.unshift(entry)
@@ -53,6 +54,8 @@ function uploadedEntry(it, data, kind) {
     number: existing ? shownNumber(data) : it.number,
     extra: existing ? isExtra(data) : Boolean(it.extra),
     volume: existing ? data.volumeNumber ?? null : it.volume ?? null,
+    // Idioma del capítulo en MangaDex (null en las demás plataformas).
+    lang: data.lang || (state.platform === 'mangadex' ? itemLang(it) : null),
     title: (existing ? data.title : it.title) || '',
     folder: it.name,
     dir: it.dir,
@@ -81,6 +84,7 @@ function uploadedRow(e) {
       el('div', { class: 'up-title' },
         el('b', { text: chapterLabel(e.number, e.extra) }),
         e.volume != null ? el('span', { class: 'up-vol', text: `· Vol ${e.volume}` }) : null,
+        e.lang ? el('span', { class: 'up-vol', text: `· ${MDX_LANG_SHORT[e.lang] || e.lang.toUpperCase()}`, title: mdxLangLabel(e.lang) }) : null,
         e.title ? el('span', { class: 'up-name', text: `— ${e.title}` }) : null,
         el('span', { class: 'up-work', text: e.workTitle })),
       el('div', { class: 'ch-meta' },

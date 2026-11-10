@@ -303,14 +303,15 @@ function findPublished(items, { includeKept = false } = {}) {
   for (const it of items) {
     if (!batch.items.includes(it) || it.status === 'done' || it.workId == null || it.number == null) continue
     if (!includeKept && it.keptPublished === itemSlot(it)) continue // ya se preguntó y se decidió dejarlo
-    const remote = workChapters(it.workId, Boolean(it.extra)).find((c) => shownNumber(c) === it.number)
+    const remote = chaptersInLang(workChapters(it.workId, Boolean(it.extra)), itemLang(it)).find((c) => shownNumber(c) === it.number)
     if (remote) found.push({ it, remote })
   }
   return found
 }
 
 /** «12:c5» o «12:e2»: obra, tipo (capítulo o extra) y número. */
-const itemSlot = (it) => `${it.workId}:${it.extra ? 'e' : 'c'}${it.number}`
+// Con MangaDex, el idioma también cuenta: el 12 en español y el 12 en inglés no se repiten.
+const itemSlot = (it) => `${it.workId}:${it.extra ? 'e' : 'c'}${it.number}${state.platform === 'mangadex' ? `:${itemLang(it)}` : ''}`
 const itemLabel = (it) => chapterLabel(it.number, it.extra)
 
 /** «caps 1–3, 5 · extras 1–2» */
@@ -509,6 +510,8 @@ function syncDefaultVolume() {
 }
 
 function batchValidate() {
+  // Si cambió el destino (MangaDex activa o en «También a…»), las filas muestran u ocultan el idioma.
+  if (syncMdxTarget()) renderBatch()
   syncDefaultVolume()
   const show = state.attempted
   const plan = schedulePlan()
@@ -523,9 +526,9 @@ function batchValidate() {
   const counts = new Map()
   queue.forEach((i) => { if (i.number != null && i.workId != null) { const k = itemSlot(i); counts.set(k, (counts.get(k) || 0) + 1) } })
   const existing = new Map()
-  const existingFor = (workId, extra) => {
-    const k = `${workId}:${extra}`
-    if (!existing.has(k)) existing.set(k, new Set(workChapters(workId, extra).map(shownNumber)))
+  const existingFor = (workId, extra, lang) => {
+    const k = `${workId}:${extra}:${lang}`
+    if (!existing.has(k)) existing.set(k, new Set(chaptersInLang(workChapters(workId, extra), lang).map(shownNumber)))
     return existing.get(k)
   }
 
@@ -543,7 +546,7 @@ function batchValidate() {
       else if (it.number >= EXTRA_BASE) { err = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`; always = true }
       else if (it.extra && !hasCap('extras')) { err = `${plat().label} no tiene extras: márcalo como capítulo o quítalo de la lista.`; always = true }
       // Si ya quedó en la plataforma activa y solo falta en otra, no cuenta como repetido.
-      else if (!it.doneOn?.has(state.platform) && existingFor(it.workId, Boolean(it.extra)).has(it.number)) { err = `${it.extra ? 'El extra' : 'El capítulo'} ${it.number} ya existe en «${work.title}».`; always = true }
+      else if (!it.doneOn?.has(state.platform) && existingFor(it.workId, Boolean(it.extra), itemLang(it)).has(it.number)) { err = `${it.extra ? 'El extra' : 'El capítulo'} ${it.number} ya existe en «${work.title}»${state.platform === 'mangadex' ? ` en ${mdxLangName(itemLang(it))}` : ''}.`; always = true }
       else if (counts.get(itemSlot(it)) > 1) { err = `${it.extra ? 'El extra' : 'El número'} ${it.number} está repetido en «${work.title}».`; always = true }
       else if (it.volume != null && (!Number.isInteger(it.volume) || it.volume < 0)) { err = 'El tomo debe ser un número entero.'; always = true }
       else if (it.files.length > MAX_PAGES) { err = `Tiene ${it.files.length} páginas (máximo ${MAX_PAGES}).`; always = true }
@@ -684,6 +687,9 @@ function chapterRow(it) {
     type: 'text', maxlength: '256', placeholder: 'Título (opcional)', value: it.title, disabled: locked,
     oninput: (e) => { it.title = e.target.value.trim() },
   })
+  // Idioma del capítulo para MangaDex (solo se ve si la subida va allí).
+  const lang = el('select', { disabled: locked, title: 'Idioma del capítulo en MangaDex', onchange: (e) => { it.lang = e.target.value; batchValidate() } })
+  mdxLangOptions(lang, itemLang(it), { short: true })
   const when = el('span', { class: 'when' })
   const note = el('div', { class: 'ch-note' })
   const error = el('div', { class: 'ch-error' })
@@ -713,7 +719,8 @@ function chapterRow(it) {
         kind,
         el('label', { class: `ch-field${it.extra ? ' extra' : ''}` }, el('span', { class: 'pre', text: it.extra ? 'Extra' : 'Cap' }), num),
         el('label', { class: 'ch-field', 'data-cap': 'volume' }, el('span', { class: 'pre', text: 'Vol' }), vol),
-        title),
+        title,
+        el('label', { class: 'ch-field ch-lang mdx-only' }, lang)),
       el('div', { class: 'ch-meta' },
         el('span', { class: 'folder', text: `${it.archive ? '🗜️' : '📁'} ${it.name}`, title: it.archive ? `Del comprimido ${it.archive}` : it.dir }),
         el('span', { class: 'sep' }),

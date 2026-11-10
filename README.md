@@ -101,7 +101,12 @@ obra allí es un borrador que revisa su staff, así que la app no lo ofrece. El 
   autorizado.
 - **Obras.** La lista trae las obras de los grupos y las que agregues con «Agregar obra» (buscando por título o
   pegando el enlace de la obra). Los capítulos que cuentan como «ya subidos» son los de los grupos (o los de la
-  cuenta, sin grupo) en ese idioma.
+  cuenta, sin grupo), y cada uno trae su idioma.
+- **Idioma por capítulo.** El de la cuenta es el predeterminado, y cada capítulo puede ir en otro (un grupo que
+  traduce a varios idiomas): el campo «Idioma del capítulo (MangaDex)» en «Un capítulo» y una lista en cada fila
+  de «Varios capítulos». Solo se ven si la subida va a MangaDex (activa o en «También a…»). El número siguiente,
+  los «ya existe», los repetidos de la lista y «Capítulos subidos» se cuentan por idioma, porque en MangaDex el
+  12 en español y el 12 en inglés son capítulos distintos.
 - **Páginas.** Las reglas de MangaDex aceptan JPG, PNG o GIF de hasta 20 MB y 10 000 × 10 000 px. Las que
   cumplen van tal cual; las demás (WebP, AVIF, muy pesadas o muy grandes) se convierten a JPG con el mismo
   convertidor, y una tira larga (manhwa) se corta en partes de 9000 px de alto. Como máximo 500 imágenes y

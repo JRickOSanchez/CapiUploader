@@ -13,7 +13,8 @@
  *   GET /user/me                         usuario de la sesión
  *   GET /group?name= · GET /group/:id    elegir los grupos de scanlation (o «Sin grupo», solo autor o traductor autorizado)
  *   GET /manga?group= · GET /manga?ids[]= · GET /manga?title=   obras de los grupos, las agregadas a mano y la búsqueda
- *   GET /chapter?manga=&translatedLanguage[]=&groups[]=  (o &uploader= sin grupo)   capítulos ya subidos
+ *   GET /chapter?manga=&groups[]=  (o &uploader= sin grupo)   capítulos ya subidos, de todos los idiomas
+ *     (cada capítulo puede ir en otro idioma: el 12 en español y el 12 en inglés son capítulos distintos)
  *   POST /upload/check-approval-required  ¿lo revisa el staff? (el primero de cada idioma)
  *   GET /upload → DELETE /upload/:id      una sola sesión de subida por cuenta (solo se abandona una nuestra)
  *   POST /upload/begin {manga, groups}
@@ -63,6 +64,7 @@ const LANGUAGES = [
   { value: 'pt-br', label: 'Portugués (Brasil)' },
 ]
 const DEFAULT_LANG = 'es-la'
+const isLang = (v) => LANGUAGES.some((l) => l.value === v)
 
 // En desarrollo (electron .) se puede apuntar a un servidor falso; la app instalada no lo lee.
 let base = (process.defaultApp && process.env.CAPI_MANGADEX_BASE) || DEFAULT_BASE
@@ -298,6 +300,7 @@ function normChapter(c) {
     state: publishAt && Date.parse(publishAt) > Date.now() ? 'scheduled' : 'published',
     publishAt,
     pages: a.pages ?? null,
+    lang: a.translatedLanguage || null,
     url: `https://mangadex.org/chapter/${c.id}`,
     createdAt: a.createdAt || null,
   }
@@ -337,11 +340,11 @@ async function listWorks(token, user, signal, settings = getSettings()) {
   return works
 }
 
-/** Capítulos de la obra en el idioma de la cuenta, de los grupos elegidos (o subidos por la cuenta si va sin grupo). */
+/** Capítulos de la obra de los grupos elegidos (o subidos por la cuenta si va sin grupo), en todos los idiomas, cada uno con su lang. */
 async function listChapters(token, mangaId, signal, settings = getSettings(), user = store().get(USER) || {}) {
   if (!isUuid(mangaId)) throw new PlatformError('Obra de MangaDex no válida.', 'mangadex.invalid')
   const who = settings.groups.length ? settings.groups.map((g) => `groups[]=${g.id}`).join('&') : user.id ? `uploader=${user.id}` : ''
-  const q = `/chapter?manga=${mangaId}&translatedLanguage[]=${settings.lang}${who ? `&${who}` : ''}&${ratings}`
+  const q = `/chapter?manga=${mangaId}${who ? `&${who}` : ''}&${ratings}`
     + '&includeFuturePublishAt=1&includeEmptyPages=1&includeExternalUrl=1&includeFutureUpdates=1&order[chapter]=desc'
   return (await listAll(token, q, { max: 5000, signal }))
     .map(normChapter)
@@ -477,7 +480,8 @@ async function uploadChapter(token, { user = {}, settings = getSettings(), workI
   }
   checkChapter(chapter, settings)
   checkPages(files)
-  const lang = settings.lang
+  // Cada capítulo puede ir en su idioma (un grupo que traduce a varios); si no dice, el de la cuenta.
+  const lang = isLang(chapter.lang) ? chapter.lang : settings.lang
   const groups = settings.groups.map((g) => g.id)
   const totalBytes = files.reduce((s, f) => s + f.size, 0)
   const originOf = (i) => files[i].origin ?? i
@@ -544,7 +548,7 @@ async function uploadChapter(token, { user = {}, settings = getSettings(), workI
     } catch (err) {
       // Si la respuesta se perdió, se mira si el capítulo quedó creado antes de dar un error.
       if (['network', 'timeout'].includes(err.code) || err.status >= 500) {
-        const found = await listChapters(await tok(), workId, undefined, settings, user).then((l) => l.find((c) => c.number === Number(chapter.number))).catch(() => null)
+        const found = await listChapters(await tok(), workId, undefined, settings, user).then((l) => l.find((c) => c.number === Number(chapter.number) && (!c.lang || c.lang === lang))).catch(() => null)
         if (found) {
           committed = true
           diagnostics.warn(ID, `Cap ${chapter.number}: la respuesta se cortó pero el capítulo sí se creó (${found.id}).`)
@@ -558,7 +562,7 @@ async function uploadChapter(token, { user = {}, settings = getSettings(), workI
     if (!id) throw new PlatformError('MangaDex respondió sin el id del capítulo.', 'mangadex.bad_response')
     onProgress({ phase: 'done' })
     diagnostics.info(ID, `Cap ${chapter.number} → ${workId}: subido (${id})${review ? ', pendiente de revisión' : ''}.`)
-    return { id, number: Number(chapter.number), pages: files.length, url: `https://mangadex.org/chapter/${id}`, review, state: at ? 'scheduled' : 'published', publishAt: at ? `${at}Z` : null }
+    return { id, number: Number(chapter.number), lang, pages: files.length, url: `https://mangadex.org/chapter/${id}`, review, state: at ? 'scheduled' : 'published', publishAt: at ? `${at}Z` : null }
   } catch (err) {
     // La sesión única no debe quedar ocupada: se abandona (los archivos subidos se descartan).
     if (!committed) {
@@ -579,5 +583,5 @@ module.exports = {
   setBase: (api, auth) => { base = api || DEFAULT_BASE; authBase = auth || api || DEFAULT_AUTH; access = null },
   isUuid, login, status, signIn, signOut, withSession, accessToken, getSettings, setSettings,
   listWorks, listChapters, searchManga, searchGroups, addWork, removeWork, uploadChapter, deleteChapter,
-  needsConversion, checkPages, checkChapter, titleDescriptor, imageSize, pickTitle, normChapter, publishAtValue, MAX_GROUPS,
+  isLang, needsConversion, checkPages, checkChapter, titleDescriptor, imageSize, pickTitle, normChapter, publishAtValue, MAX_GROUPS,
 }

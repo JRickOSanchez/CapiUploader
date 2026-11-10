@@ -74,13 +74,14 @@ async function chapters(platform, workId, key) {
 
 /* ---------- ¿Ya existe el capítulo? (plataformas secundarias) ---------- */
 
-const existing = new Map() // `${platform}|${workId}` -> { at, numbers: Set }
+const existing = new Map() // `${platform}|${workId}` -> { at, chapters: [{ number, lang }] }
 
 function rememberExisting(platform, workId, list) {
-  existing.set(`${platform}|${workId}`, { at: Date.now(), numbers: new Set(list.map((c) => Number(c.number))) })
+  existing.set(`${platform}|${workId}`, { at: Date.now(), chapters: list.map((c) => ({ number: Number(c.number), lang: c.lang || null })) })
 }
 
-async function alreadyThere(platform, workId, number, signal) {
+/** ¿Ya está ese número? lang: solo cuenta en ese idioma (MangaDex: el 12 en español y en inglés son distintos). */
+async function alreadyThere(platform, workId, number, signal, lang = null) {
   const k = `${platform}|${workId}`
   let e = existing.get(k)
   if (!e || Date.now() - e.at > EXISTING_TTL) {
@@ -88,10 +89,10 @@ async function alreadyThere(platform, workId, number, signal) {
     rememberExisting(platform, workId, list)
     e = existing.get(k)
   }
-  return e.numbers.has(Number(number))
+  return e.chapters.some((c) => c.number === Number(number) && (!lang || !c.lang || c.lang === lang))
 }
 
-const markUploaded = (platform, workId, number) => existing.get(`${platform}|${workId}`)?.numbers.add(Number(number))
+const markUploaded = (platform, workId, number, lang = null) => existing.get(`${platform}|${workId}`)?.chapters.push({ number: Number(number), lang })
 
 /* ---------- Subida ---------- */
 
@@ -99,7 +100,7 @@ const markUploaded = (platform, workId, number) => existing.get(`${platform}|${w
 function chapterFor(platform, chapter) {
   if (platform === 'capibara') return chapter
   const c = { number: Number(chapter.number), title: chapter.title || null }
-  if (platform === 'mangadex') { c.volumeNumber = chapter.volumeNumber ?? null; c.publishAt = chapter.publishAt || null }
+  if (platform === 'mangadex') { c.volumeNumber = chapter.volumeNumber ?? null; c.publishAt = chapter.publishAt || null; c.lang = chapter.lang || null }
   if (platform === 'crimson') { c.publishAt = chapter.publishAt || null; c.notify = chapter.notify !== false }
   return c
 }
@@ -251,7 +252,8 @@ async function upload(payload, { key, signal, onProgress = () => {} }) {
     }
     if (platform === 'mangadex') {
       return mangadex.withSession(async (_token, user, settings) => {
-        if (targets.length > 1 && await alreadyThere(platform, t.workId, chapter.number, signal).catch(() => false)) {
+        const lang = mangadex.isLang(chapter.lang) ? chapter.lang : settings.lang
+        if (targets.length > 1 && await alreadyThere(platform, t.workId, chapter.number, signal, lang).catch(() => false)) {
           mixer.status(platform, 'skipped', { reason: 'ya estaba' })
           return { skipped: true, reason: 'Ya estaba subido.', number: Number(chapter.number) }
         }
@@ -262,7 +264,7 @@ async function upload(payload, { key, signal, onProgress = () => {} }) {
         const data = await mangadex.uploadChapter(() => mangadex.accessToken(), {
           user, settings, workId: String(t.workId), chapter: chapterFor(platform, chapter), files, signal, onProgress: report,
         })
-        markUploaded(platform, t.workId, chapter.number)
+        markUploaded(platform, t.workId, chapter.number, lang)
         return data
       })
     }

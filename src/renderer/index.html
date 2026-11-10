@@ -214,6 +214,12 @@
           <span class="label">Título del capítulo <span class="counter" id="titleCounter">0/256</span></span>
           <input type="text" id="chTitle" maxlength="256" placeholder="Opcional — p. ej. «El regreso»" />
         </label>
+        <!-- Solo cuando la subida va a MangaDex: cada capítulo puede ir en su idioma. -->
+        <label class="field mdx-only" id="chLangField">
+          <span class="label">Idioma del capítulo (MangaDex)</span>
+          <select id="chLang"></select>
+          <span class="hint">El de tu cuenta viene elegido; cámbialo si este capítulo es de otra traducción.</span>
+        </label>
         <div class="option" data-cap="extras">
           <div class="option-text">
             <span class="option-title">Es un extra (arte, ilustración, contenido fuera de capítulos)</span>
@@ -739,7 +745,7 @@
           </label>
           <p class="hint">Se crean en mangadex.org → Settings → API Clients («personal client»). MangaDex puede tardar en aprobarlo; hasta entonces no deja entrar.</p>
           <label class="field">
-            <span class="label">Idioma de tus traducciones</span>
+            <span class="label">Idioma predeterminado de tus traducciones</span>
             <select id="mdxLang"></select>
           </label>
           <div class="field">

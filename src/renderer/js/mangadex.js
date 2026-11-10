@@ -111,7 +111,9 @@ async function mdxSaveAccount() {
   }
   const btn = $('#accountSave')
   btn.disabled = true
+  const langBefore = mdxDefaultLang()
   if (!(await mdxSaveSettings({ lang: $('#mdxLang').value, termsAccepted: terms, noGroup: $('#mdxNoGroup').checked }))) { btn.disabled = false; return }
+  if (mdxDefaultLang() !== langBefore) { mdxLangOptions($('#chLang'), mdxDefaultLang()); if (state.mode === 'batch') renderBatch() }
   if (wantsLogin) {
     btn.textContent = 'Entrando…'
     const res = await window.capi.platform.signIn('mangadex', { username, password, clientId, clientSecret })
@@ -191,6 +193,50 @@ async function mdxAddWork(w) {
   if (fresh) (onAdded || selectWork)(fresh)
 }
 
+/* ---------- Idioma de cada capítulo ----------
+   El de la cuenta es el predeterminado; cada capítulo puede ir en otro (un grupo que traduce a
+   varios idiomas). En MangaDex el 12 en español y el 12 en inglés son capítulos distintos, así que
+   los números repetidos se revisan por idioma. */
+
+const MDX_LANG_SHORT = { 'es-la': 'ES-LA', es: 'ES', en: 'EN', 'pt-br': 'PT-BR' }
+const mdxDefaultLang = () => mdxSettings().lang || 'es-la'
+const mdxLangLabel = (v) => mdxInfo().languages.find((l) => l.value === v)?.label || v
+// Para usar dentro de una frase: «ya existe en inglés».
+const MDX_LANG_NAME = { 'es-la': 'español latino', es: 'español de España', en: 'inglés', 'pt-br': 'portugués de Brasil' }
+const mdxLangName = (v) => MDX_LANG_NAME[v] || mdxLangLabel(v)
+
+/** El idioma con el que se sube ese capítulo de «Varios capítulos». */
+const itemLang = (it) => it.lang || mdxDefaultLang()
+
+/** El idioma elegido en «Un capítulo». */
+const currentMdxLang = () => $('#chLang')?.value || mdxDefaultLang()
+
+/** Capítulos de una obra de MangaDex en ese idioma (los de las demás plataformas no traen idioma). */
+function chaptersInLang(list, lang) {
+  if (state.platform !== 'mangadex' || !lang) return list || []
+  return (list || []).filter((c) => !c.lang || c.lang === lang)
+}
+
+/** Opciones de idioma para un <select> (cortas en las filas de «Varios capítulos»). */
+function mdxLangOptions(select, value, { short = false } = {}) {
+  select.innerHTML = ''
+  for (const l of mdxInfo().languages) select.append(el('option', { value: l.value, text: short ? (MDX_LANG_SHORT[l.value] || l.value.toUpperCase()) : l.label, title: l.label }))
+  select.value = value
+}
+
+/**
+ * Muestra el idioma (en el formulario y en cada fila) solo si la subida va a MangaDex, con sesión.
+ * Se llama al validar, así sigue a la plataforma activa y a «También a…».
+ */
+function syncMdxTarget() {
+  const on = goesToMangadex() && Boolean(mdxSession().loggedIn)
+  const changed = document.body.classList.contains('to-mangadex') !== on
+  document.body.classList.toggle('to-mangadex', on)
+  const sel = $('#chLang')
+  if (sel && (!sel.options.length || (changed && on))) mdxLangOptions(sel, sel.value || mdxDefaultLang())
+  return changed
+}
+
 /* ---------- Reglas de MangaDex en el formulario ---------- */
 
 /** «[HQ]», «v2», «(LQ)»… en el título: las reglas solo permiten «Censored» o «Uncensored». */
@@ -265,6 +311,10 @@ function initMangadex() {
   // Las reglas se leen en la app (traducidas); desde esa ventana también se puede abrir mangadex.org.
   $('#mdxRulesLink').addEventListener('click', (e) => { e.preventDefault(); window.capi.settings.openRules() })
   $('#mdxNoGroup').addEventListener('change', async (e) => { await mdxSaveSettings({ noGroup: e.target.checked }); renderMdxGroup() })
+  // Idioma de «Un capítulo»: cambia el siguiente número sugerido y los repetidos.
+  $('#chLang').addEventListener('change', () => { applyChapterSuggestions(); renderWorkInfo(); validate() })
+  // Al cambiar de plataforma o el idioma de la cuenta, el capítulo vuelve al idioma predeterminado.
+  on('platformChanged', () => { const s = $('#chLang'); if (s) mdxLangOptions(s, mdxDefaultLang()) })
   $('#mdxTermsLink').addEventListener('click', (e) => { e.preventDefault(); window.capi.system.openExternal(mdxInfo().termsUrl) })
   $('#mdxWorkSearch').addEventListener('input', mdxSearchWorks)
   $('#mdxWorkCancel').addEventListener('click', closeMdxAddWork)

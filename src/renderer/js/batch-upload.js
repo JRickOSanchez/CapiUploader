@@ -90,6 +90,7 @@ async function batchStart() {
         notify: plan.notify,
         announcePage: announcePageFor(it.files),
         extra: Boolean(it.extra),
+        lang: goesToMangadex() ? itemLang(it) : null,
       },
     })
     bytesBefore += sumSize(it.files)
@@ -113,7 +114,7 @@ async function batchStart() {
       noteJointResult(workById(it.workId), res.data, itemLabel(it))
       noteMdxReview(res.data, itemLabel(it))
       const cache = state.chaptersByWork.get(it.workId)
-      const entry = { id: res.data.id, number: res.data.number ?? it.number, extra: Boolean(it.extra), extraNumber: it.extra ? it.number : null, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url }
+      const entry = { id: res.data.id, number: res.data.number ?? it.number, extra: Boolean(it.extra), extraNumber: it.extra ? it.number : null, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url, lang: res.data.lang || (goesToMangadex() ? itemLang(it) : null) }
       if (cache) cache.push(entry)
       if (state.selectedWork?.id === it.workId && state.chapters !== cache) state.chapters.push(entry)
       // Sale de la cola y pasa a «Capítulos subidos».
