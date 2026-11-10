@@ -30,7 +30,8 @@ const SECRETS = [
   [/\bBearer\s+[\w.~+/=-]+/gi, 'Bearer …'],
   // Firmas y tokens en URLs (subidas firmadas, CDNs): la dirección queda, la firma no.
   [/([?&](?:x-amz-[\w-]+|signature|sig|token|access_token|key|expires|policy|key-pair-id)=)[^&\s"'<>]+/gi, '$1…'],
-  [/((?:cookie|set-cookie|authorization|x-api-key|password|contrase(?:ñ|n)a|token)"?\s*[:=]\s*)"?[^"',;\s}]+/gi, '$1…'],
+  // «secret»: el Client Secret de MangaDex (client_secret=…, "clientSecret":"…").
+  [/((?:cookie|set-cookie|authorization|x-api-key|password|contrase(?:ñ|n)a|token|secret)"?\s*[:=]\s*)"?[^"',;&\s}]+/gi, '$1…'],
 ]
 
 /** Texto sin claves, tokens ni firmas. */

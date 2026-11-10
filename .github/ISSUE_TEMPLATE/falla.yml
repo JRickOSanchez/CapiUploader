@@ -1,0 +1,74 @@
+name: Reportar una falla
+description: Algo no funciona como debería (también para las versiones de prueba).
+title: "[Falla] "
+labels: ["falla"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por avisar. Con estos datos podemos reproducir la falla y corregirla.
+        **Nunca pegues contraseñas, API keys, el Client Secret de MangaDex ni tokens.** El registro de diagnóstico ya los tapa.
+  - type: input
+    id: version
+    attributes:
+      label: Versión de CapiUploader
+      description: Está en Ajustes, o en el nombre del archivo que descargaste.
+      placeholder: "1.5.0-beta.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: plataforma
+    attributes:
+      label: Plataforma
+      options:
+        - MangaDex
+        - Capibara
+        - ScanCrimson
+        - Mangation
+        - No depende de la plataforma
+    validations:
+      required: true
+  - type: dropdown
+    id: instalacion
+    attributes:
+      label: Cómo la usas
+      options:
+        - Instalador (Setup)
+        - Portable (.exe)
+        - Portable en carpeta (.zip)
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Qué hacías
+      description: Los pasos para llegar a la falla, en orden.
+      placeholder: |
+        1. Inicié sesión en MangaDex y elegí mi grupo.
+        2. Elegí la obra «…» y agregué la carpeta del capítulo 12.
+        3. Pulsé «Subir capítulo».
+    validations:
+      required: true
+  - type: textarea
+    id: paso
+    attributes:
+      label: Qué pasó y qué esperabas
+      description: El mensaje de error tal cual aparece (incluido el código, si lo trae).
+    validations:
+      required: true
+  - type: textarea
+    id: registro
+    attributes:
+      label: Registro de diagnóstico
+      description: Ajustes → Diagnóstico → «Copiar para soporte», y pégalo aquí.
+      render: text
+  - type: textarea
+    id: capturas
+    attributes:
+      label: Capturas (opcional)
+      description: Arrastra aquí capturas de pantalla. Tapa nombres de usuario o datos que no quieras mostrar.
+  - type: checkboxes
+    id: datos
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: No pegué contraseñas, API keys, el Client Secret ni tokens.
+          required: true

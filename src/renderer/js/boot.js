@@ -16,6 +16,7 @@ async function boot() {
   initPsdProgress()
   initArchiveProgress()
   initJoints()
+  initMangadex()
   // El tema se pide al proceso principal; mientras tanto se preparan las secciones.
   const themeReady = initTheme()
   const platformsReady = initPlatforms()

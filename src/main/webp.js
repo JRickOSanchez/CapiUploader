@@ -1,5 +1,6 @@
 /**
- * Convertidor a WebP para Crimson y Mangation (Capibara recibe siempre los archivos originales).
+ * Convertidor a WebP para Crimson y Mangation, y a JPG para MangaDex cuando la página no le sirve tal
+ * cual (Capibara recibe siempre los archivos originales).
  *
  * Usa el códec de Chromium en una ventana oculta con unos pocos hilos (Web Workers), así no hace falta
  * ninguna librería nativa. Cada página se convierte una sola vez: el resultado queda en una caché en
@@ -103,7 +104,10 @@ async function encode(bytes, type, opts, signal) {
     return await new Promise((resolve, reject) => {
       const timer = setTimeout(() => { waiting.delete(id); reject(new Error('La conversión tardó demasiado.')) }, JOB_TIMEOUT_MS)
       waiting.set(id, { resolve, reject, timer })
-      w.webContents.send('webp:job', { id, bytes, type, quality: opts.quality ?? QUALITY, maxWidth: opts.maxWidth || 0, threads: THREADS })
+      w.webContents.send('webp:job', {
+        id, bytes, type, quality: opts.quality ?? QUALITY, maxWidth: opts.maxWidth || 0, threads: THREADS,
+        format: opts.format || 'image/webp', maxSide: opts.maxSide || 0, slice: opts.slice || 0,
+      })
     })
   } finally {
     active--
@@ -177,4 +181,55 @@ async function convertAll(files, { signal, onFile = () => {}, opts = {} } = {}) 
   return out
 }
 
-module.exports = { toWebp, convertAll, close, COVER, BANNER, THREADS }
+/* ---------- MangaDex: JPG y tiras largas cortadas ---------- */
+
+// MangaDex acepta JPG, PNG o GIF de menos de 10 000 px por lado y menos de 20 MB.
+const MANGADEX = { format: 'image/jpeg', quality: 0.92, maxSide: 9999, slice: 9000 }
+
+/**
+ * Una página en partes que acepta MangaDex: [{ path, name, type, size }] (una sola, salvo una tira
+ * larga, que se corta en trozos de hasta 9000 px de alto). Se guarda en la caché igual que los WebP.
+ */
+async function toMangadexParts(f, signal) {
+  const key = crypto.createHash('sha1').update(`md1|${f.path}|${f.size}|${f.mtime}`).digest('hex')
+  if (inFlight.has(key)) return inFlight.get(key)
+  const base = f.name.replace(/\.[^.]+$/, '')
+  const job = (async () => {
+    const d = await dir()
+    const countFile = path.join(d, `${key}.md`)
+    const count = Number(await fs.readFile(countFile, 'utf8').catch(() => ''))
+    const partName = (i, n) => (n > 1 ? `${base}-${String(i + 1).padStart(2, '0')}.jpg` : `${base}.jpg`)
+    if (count > 0) {
+      const parts = []
+      for (let i = 0; i < count; i++) {
+        const p = path.join(d, `${key}.${i}.jpg`)
+        const st = await fs.stat(p).catch(() => null)
+        if (!st?.size) { parts.length = 0; break }
+        fs.utimes(p, new Date(), new Date()).catch(() => {})
+        parts.push({ path: p, name: partName(i, count), type: 'image/jpeg', size: st.size })
+      }
+      if (parts.length === count) return parts
+    }
+    const res = await encode(await fs.readFile(f.path), f.type, MANGADEX, signal)
+    const list = res.parts?.length ? res.parts : [res.bytes]
+    const parts = []
+    for (let i = 0; i < list.length; i++) {
+      const out = path.join(d, `${key}.${i}.jpg`)
+      const tmp = `${out}.${process.pid}.tmp`
+      await fs.writeFile(tmp, list[i])
+      await fs.rename(tmp, out)
+      parts.push({ path: out, name: partName(i, list.length), type: 'image/jpeg', size: list[i].length })
+    }
+    await fs.writeFile(countFile, String(list.length))
+    if (list.length > 1) diagnostics.info('webp', `${f.name}: ${res.srcWidth}×${res.srcHeight} px se cortó en ${list.length} partes para MangaDex.`)
+    return parts
+  })()
+  inFlight.set(key, job)
+  try {
+    return await job
+  } finally {
+    inFlight.delete(key)
+  }
+}
+
+module.exports = { toWebp, convertAll, toMangadexParts, close, COVER, BANNER, THREADS, MANGADEX }

@@ -371,6 +371,8 @@ function imProblems() {
   const chosen = imChosen()
   const existing = imExisting()
   const dupes = imDupes()
+  // Las reglas de MangaDex no permiten subir trabajo sacado de otras webs.
+  if (!hasCap('import')) return `${plat().label} no permite importar capítulos de otras webs. Cambia de plataforma para importar.`
   if (!im.manga) return 'Busca la obra primero.'
   if (!imWork()) return `Elige la obra de ${plat().label} a la que van los capítulos.`
   if (!chosen.length) return 'Marca al menos un capítulo.'

@@ -43,24 +43,59 @@ function setState(patch) {
   send(current)
 }
 
-/** «1.10.0» > «1.9.2». Ignora la «v» del tag y lo que vaya tras un guion. */
+/** «1.5.0-beta.2» → { core: [1, 5, 0], pre: ['beta', 2] } (pre vacío en una versión final). */
+function parseVersion(v) {
+  const [core, ...rest] = String(v).replace(/^v/i, '').split('-')
+  const pre = rest.join('-')
+  return {
+    core: core.split('.').map((n) => parseInt(n, 10) || 0),
+    pre: pre ? pre.split('.').map((p) => (/^\d+$/.test(p) ? Number(p) : p)) : [],
+  }
+}
+
+/**
+ * ¿a es más nueva que b? «1.10.0» > «1.9.2». Con el mismo número, la final gana a las de prueba
+ * («1.5.0» > «1.5.0-beta.3») y entre pruebas cuenta la última parte («beta.2» > «beta.1»).
+ */
 function newer(a, b) {
-  const parse = (v) => String(v).replace(/^v/i, '').split('-')[0].split('.').map((n) => parseInt(n, 10) || 0)
-  const x = parse(a)
-  const y = parse(b)
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0)
+  const x = parseVersion(a)
+  const y = parseVersion(b)
+  for (let i = 0; i < Math.max(x.core.length, y.core.length); i++) {
+    if ((x.core[i] || 0) !== (y.core[i] || 0)) return (x.core[i] || 0) > (y.core[i] || 0)
+  }
+  if (!x.pre.length || !y.pre.length) return !x.pre.length && y.pre.length > 0
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i]
+    const q = y.pre[i]
+    if (p === q) continue
+    if (p === undefined) return false
+    if (q === undefined) return true
+    if (typeof p === 'number' && typeof q === 'number') return p > q
+    if (typeof p === 'number') return false
+    if (typeof q === 'number') return true
+    return String(p) > String(q)
   }
   return false
 }
 
-/** El último release publicado (no borradores ni prerelease) desde la API pública de GitHub. */
+/** ¿Es una versión de prueba? («1.5.0-beta.1») */
+const isPrerelease = (v) => parseVersion(v).pre.length > 0
+
+/**
+ * El último release publicado desde la API pública de GitHub. Con una versión final instalada solo
+ * cuentan los releases finales (los de prueba nunca les llegan); con una de prueba instalada también
+ * cuentan los de prueba, para pasar a la siguiente prueba o a la final.
+ */
 async function latestRelease() {
-  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': `CapiUploader/${appVersion()}` },
-  })
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': `CapiUploader/${appVersion()}` }
+  const testing = isPrerelease(appVersion())
+  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases${testing ? '?per_page=15' : '/latest'}`, { headers })
   if (!res.ok) throw new Error(`GitHub respondió ${res.status}`)
-  const r = await res.json()
+  let r = await res.json()
+  if (testing) {
+    r = (Array.isArray(r) ? r : []).filter((x) => !x.draft && x.tag_name)
+      .reduce((best, x) => (!best || newer(x.tag_name, best.tag_name) ? x : best), null) || {}
+  }
   const asset = (re) => r.assets?.find((a) => re.test(a.name))?.browser_download_url || null
   return {
     version: String(r.tag_name || '').replace(/^v/i, ''),
@@ -140,4 +175,4 @@ function init(onState) {
   timer.unref?.()
 }
 
-module.exports = { init, check, install, state: () => current, newer, RELEASES_URL }
+module.exports = { init, check, install, state: () => current, newer, isPrerelease, RELEASES_URL }

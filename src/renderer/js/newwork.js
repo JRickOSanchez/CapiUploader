@@ -37,6 +37,7 @@ const canCreateWorks = () => Boolean(state.me?.key?.scopes?.includes('works:writ
  * opts.onCreated(work): se llama con la obra ya cargada en la lista.
  */
 async function openNewWork({ title = '', language = '', onCreated = null } = {}) {
+  if (state.platform === 'mangadex') return openMdxAddWork({ title, onAdded: onCreated })
   if (!isCapibara()) return openAltWork({ title, onCreated })
   if (!state.hasKey) return openKeyModal(true)
   if (state.me && !canCreateWorks()) {

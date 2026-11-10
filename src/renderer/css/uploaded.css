@@ -51,6 +51,10 @@
 }
 .ask-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ask-list li.more { color: var(--text-3); }
+.ask-list.wrap { max-height: 340px; }
+.ask-list.wrap li { white-space: normal; overflow: visible; line-height: 1.45; padding-left: 14px; position: relative; }
+.ask-list.wrap li::before { content: "•"; position: absolute; left: 2px; color: var(--accent); }
+.ask-list.wrap li + li { margin-top: 4px; }
 .up-title .up-vol, .up-title .up-name { margin-left: 5px; }
 /* La cola siempre conserva espacio aunque la lista de subidos sea larga. */
 .pages-card.batch-only { min-height: 300px; }

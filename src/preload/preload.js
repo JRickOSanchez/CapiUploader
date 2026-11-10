@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('capi', {
     relaunch: () => invoke('app:relaunch'),
     // Ventana aparte con las notas de la versión instalada.
     openWhatsNew: () => invoke('whatsnew:open'),
+    // Guía de la versión de prueba (solo en versiones beta).
+    openGuide: () => invoke('guide:open'),
+    // Reglas de subida de MangaDex.
+    openRules: () => invoke('rules:open'),
     // Cambios hechos en otra ventana de la app.
     onThemeChanged: (cb) => ipcRenderer.on('theme:changed', (_e, t) => cb(t)),
   },
@@ -47,6 +51,14 @@ contextBridge.exposeInMainWorld('capi', {
     renumberChapter: (platform, workId, chapterId, number) => invoke('platform:renumberChapter', platform, workId, chapterId, number),
     onChanged: (cb) => ipcRenderer.on('platform:changed', (_e, s) => cb(s)),
     onSessions: (cb) => ipcRenderer.on('platform:sessions', (_e, s) => cb(s)),
+  },
+  // MangaDex: grupo e idioma de la cuenta, aceptar sus reglas, buscar grupos y obras, obras agregadas.
+  mangadex: {
+    setSettings: (s) => invoke('mangadex:setSettings', s),
+    searchGroups: (q) => invoke('mangadex:searchGroups', q),
+    searchManga: (q) => invoke('mangadex:searchManga', q),
+    addWork: (id) => invoke('mangadex:addWork', id),
+    removeWork: (id) => invoke('mangadex:removeWork', id),
   },
   // Crear obras nuevas (la clave necesita works:write).
   works: {

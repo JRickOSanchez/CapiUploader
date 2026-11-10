@@ -124,7 +124,8 @@ const backoff = (attempt) => Math.min(1000 * 2 ** attempt, 15e3) * (0.75 + Math.
 
 /**
  * Cliente de una plataforma.
- * conf: { id, label, base, origin, pacer, auth(session) -> headers, classify(res, body, opts) -> Error|null }
+ * conf: { id, label, base, origin, pacer, auth(session) -> headers, classify(res, body, opts) -> Error|null,
+ *         retryAfterMs(res) -> ms que pide esperar un 429 }
  * request({ session, method, path, json, form (de multipart()), onBytes, signal, retry, timeoutMs, raw })
  */
 function createClient(conf) {
@@ -192,7 +193,8 @@ function createClient(conf) {
       if (special) throw Object.assign(special, { retried })
 
       if (res.status === 429 || res.status === 503) {
-        const wait = (Number(res.headers.get('retry-after')) || 0) * 1000 || backoff(attempt + 2)
+        // Cada plataforma puede decir cuánto esperar a su manera (MangaDex manda la hora de fin del periodo).
+        const wait = conf.retryAfterMs?.(res) || (Number(res.headers.get('retry-after')) || 0) * 1000 || backoff(attempt + 2)
         pacer.pause(wait)
         if (canRetry && attempt < MAX_RETRIES) { retried = true; continue }
         throw new PlatformError(`${label} pide esperar antes de seguir.`, 'api.rate_limited', res.status, { retryAfter: Math.ceil(Math.max(wait, pacer.pausedFor) / 1000), retried })

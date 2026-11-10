@@ -385,6 +385,8 @@ function validate() {
   // Páginas
   if (!state.files.length) errors.files = 'Agrega las páginas del capítulo.'
   else if (state.files.some((f) => f.size > MAX_BYTES)) errors.files = 'Hay imágenes de más de 40 MB.'
+  // Reglas de MangaDex (grupos, reglas aceptadas, título sin «[HQ]»/«v2»).
+  if (goesToMangadex()) { const p = mdxChapterProblem({ title: $('#chTitle').value }); if (p) errors.mangadex = p }
 
   $('#workTrigger').classList.toggle('invalid', show && Boolean(errors.work))
   $('#titleCounter').textContent = `${$('#chTitle').value.length}/256`
@@ -514,6 +516,8 @@ async function startUpload() {
     const first = Object.keys(errors)[0]
     const focusMap = { work: '#workTrigger', number: '#chNumber', volume: '#chVolume', publish: '#publishAt', files: '#dropzone' }
     if (errors.key) return openKeyModal()
+    // Faltan grupos o aceptar las reglas de MangaDex: se abre la cuenta para arreglarlo.
+    if (first === 'mangadex' && !mdxTitleDescriptor($('#chTitle').value)) { toast('warn', 'Revisa tu cuenta de MangaDex', errors.mangadex); return openAccountModal('mangadex') }
     $(focusMap[first] || '#uploadBtn')?.focus()
     toast('warn', 'Revisa el formulario', errors[first])
     return
@@ -521,6 +525,7 @@ async function startUpload() {
 
   const work = state.selectedWork
   if (!(await alsoReady([work.id]))) return
+  if (!(await mdxRemindRules())) return
   // En un reintento solo se sube a las plataformas donde aún no quedó.
   const sig = `${state.platform}|${work.id}|${form.extra ? 'x' : ''}${form.number}|${state.files.map((f) => f.path).join('|')}`
   if (single.sig !== sig) { single.sig = sig; single.doneOn = new Set() }
@@ -593,6 +598,7 @@ async function startUpload() {
   if (res.data.results) toast('success', 'Subido a todas las plataformas', resultsText(res.data.results), 8000)
   warnSingles(res.data.singleCheck, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
   noteJointResult(work, res.data, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
+  noteMdxReview(res.data, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
   state.chapters.push({ number: res.data.number ?? form.number, extra: form.extra, extraNumber: form.extra ? form.number : null, volumeNumber: form.volumeNumber, state: res.data.state })
   loadChapters()
 }

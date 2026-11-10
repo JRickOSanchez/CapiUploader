@@ -1,7 +1,7 @@
 # CapiUploader
 
 App de escritorio (Electron) para subir capítulos de manga a **Capibara Traductor** con su API v1, y también a
-**ScanCrimson** y **Mangation** (ver «Plataformas»).
+**ScanCrimson**, **Mangation** y **MangaDex** (ver «Plataformas»).
 
 ## Reglas y restricciones
 
@@ -44,10 +44,11 @@ Al actualizar desde la 1.0, la clave guardada se convierte sola en el primer sca
 
 ## Plataformas
 
-Junto al chip del scan, arriba a la derecha, el botón de plataforma cambia entre **Capibara**, **ScanCrimson** y
-**Mangation**. Cada una tiene sus obras, su lista de «Capítulos subidos», su última obra elegida y su propio
+Junto al chip del scan, arriba a la derecha, el botón de plataforma cambia entre **Capibara**, **ScanCrimson**,
+**Mangation** y **MangaDex**. Cada una tiene sus obras, su lista de «Capítulos subidos», su última obra elegida y su propio
 estilo (Crimson: vino casi negro con acento rosa y títulos serif; Mangation: violeta grisáceo con lavanda y
-pestañas tipo píldora). Las fuentes de esos temas van incluidas en `src/renderer/assets/fonts` (licencia OFL,
+pestañas tipo píldora; MangaDex: gris carbón plano con acento naranja, Poppins sin cursiva y la pestaña activa
+en un bloque naranja relleno). Las fuentes de esos temas van incluidas en `src/renderer/assets/fonts` (licencia OFL,
 ver `OFL.txt`).
 
 - **Capibara**: API key por scan, como siempre. Tiene todo: tomos, extras, páginas simples, página destacada,
@@ -67,8 +68,69 @@ ver `OFL.txt`).
 - **Nueva obra** abre el formulario de cada plataforma: en Crimson título, tipo, estado, sinopsis, géneros de su
   lista, +18, portada y banner (se convierten a WebP a la medida de su panel); en Mangation además la
   demografía, hasta 15 géneros de su lista y la portada obligatoria (hasta 5 MB).
-- En «Capítulos subidos», Crimson permite cambiar el número o borrar, y Mangation borrar (no tienen papelera:
-  se pide confirmación).
+- En «Capítulos subidos», Crimson permite cambiar el número o borrar, y Mangation y MangaDex borrar (no tienen
+  papelera: se pide confirmación).
+
+### MangaDex
+
+Se sube con la API oficial (v5) de `api.mangadex.org`, y **solo a obras que ya existen en MangaDex**: crear una
+obra allí es un borrador que revisa su staff, así que la app no lo ofrece. El entorno de pruebas
+`api.mangadex.dev` no se usa.
+
+- **Cuenta.** Cada usuario entra con su cuenta y el **cliente personal de la API** (Client ID y Client Secret),
+  que se crea en mangadex.org → Settings → API Clients y que MangaDex puede tardar en aprobar. La contraseña no
+  se guarda: solo el `refresh_token` con el Client ID y el Client Secret, cifrados igual que las API keys. El
+  `access_token` dura 15 minutos y se renueva solo, también a mitad de una subida larga. «Cerrar sesión» los
+  borra.
+- **Cómo se consigue el cliente personal** (según la documentación de MangaDex):
+  1. Entrar en mangadex.org con la cuenta y abrir `https://mangadex.org/settings`.
+  2. En la sección **API Clients**, pedir un cliente personal siguiendo sus instrucciones.
+  3. MangaDex lo aprueba al momento o lo deja **pendiente** hasta que su staff lo apruebe a mano. Mientras esté
+     pendiente no se puede usar.
+  4. Ya aprobado, se ve su **Client ID** (`personal-client-…`). El **Client Secret** aparece con el botón
+     **«Get Secret»**.
+  - El Client Secret es como una contraseña: MangaDex nunca lo pide, y solo sirve para la cuenta dueña del
+    cliente. Este acceso no pide la verificación en dos pasos de la cuenta.
+  - La guía de la versión de prueba explica estos pasos para los usuarios (`src/main/guides/beta-mangadex.md`).
+- **Grupos, idioma y reglas.** En la ventana de la cuenta se eligen **todos los grupos** de scanlation que
+  trabajan los capítulos (hasta 10, por nombre o pegando su enlace), el idioma de las traducciones (Español
+  Latinoamérica por defecto) y se aceptan las [reglas](https://mangadex.org/rules) y los
+  [términos de subida](https://mangadex.org/compliance). Sin aceptarlos no se sube nada, porque cada subida los
+  acepta en nombre de la cuenta (`termsAccepted`). Las reglas piden que quien no tiene grupo cree uno con su
+  nombre de usuario: «Sin grupo» solo aparece si no hay grupos y hay que confirmarlo como autor o traductor
+  autorizado.
+- **Obras.** La lista trae las obras de los grupos y las que agregues con «Agregar obra» (buscando por título o
+  pegando el enlace de la obra). Los capítulos que cuentan como «ya subidos» son los de los grupos (o los de la
+  cuenta, sin grupo) en ese idioma.
+- **Páginas.** Las reglas de MangaDex aceptan JPG, PNG o GIF de hasta 20 MB y 10 000 × 10 000 px. Las que
+  cumplen van tal cual; las demás (WebP, AVIF, muy pesadas o muy grandes) se convierten a JPG con el mismo
+  convertidor, y una tira larga (manhwa) se corta en partes de 9000 px de alto. Como máximo 500 imágenes y
+  300 MB por capítulo.
+- **Reglas que revisa la app.** Con MangaDex como destino (activa o en «También a…»):
+  - no se sube sin grupos (o «Sin grupo» confirmado) ni sin aceptar las reglas;
+  - un título con descriptores inventados («[HQ]», «v2», «(LQ)»…) no deja subir; solo se permiten
+    «Censored/Uncensored»;
+  - el tomo no se rellena solo con el del capítulo anterior, porque las reglas piden ponerlo solo si el capítulo
+    ya salió en un tomo; sí se toma de una carpeta «Vol N».
+- **Recordar las reglas.** Antes de la primera subida a MangaDex de cada sesión aparece un recordatorio con las
+  reglas principales. «Ver todas las reglas», el enlace «reglas» de la cuenta y la guía de la beta abren una
+  ventana con la traducción completa de mangadex.org/rules (`src/main/guides/mangadex-rules.md`, incluida en
+  la app). Si algo no coincide, manda la página de MangaDex.
+- **Subida.** MangaDex permite una sola sesión de subida por cuenta. Si hay una abierta que dejó la app, se
+  abandona; si es de otro lado (por ejemplo, la web), la app avisa y no la toca. Las páginas se mandan de 10
+  en 10 y al final se confirma el capítulo con su número, tomo, título, idioma, orden de páginas y, si se
+  programa, la fecha de publicación. Si algo falla antes de confirmar, la sesión se abandona para no dejarla
+  ocupada. Si la respuesta de la confirmación se pierde, se revisa si el capítulo quedó creado.
+- **Revisión.** El primer capítulo de cada idioma lo revisa el staff de MangaDex (normalmente unas horas, hasta
+  48 h). La app lo pregunta antes de subir y lo avisa al terminar.
+- **Ritmo.** MangaDex permite unas 5 peticiones por segundo por IP y bloquea la IP si se insiste tras un 429.
+  La app va de a 2 peticiones con pausa entre ellas, y un 429 detiene todas las peticiones a MangaDex hasta la
+  hora que indica `X-RateLimit-Retry-After`.
+- **Sin «Importar de web».** Con MangaDex activa no aparece, y la ventana de importar no deja usarla como
+  destino: sus reglas no permiten subir trabajo sacado de otras webs ni de otros grupos. No hay extras,
+  páginas simples, página destacada ni avisos.
+- En desarrollo (`electron .`), `CAPI_MANGADEX_BASE` y `CAPI_MANGADEX_AUTH` apuntan a un servidor falso; la
+  app instalada no los lee.
 
 ### Subir también a otras plataformas
 
@@ -84,7 +146,8 @@ marques. La obra equivalente se empareja sola por título (o la eliges una vez y
 
 ### Convertidor WebP
 
-Solo se usa para Crimson y Mangation (a Capibara van siempre los archivos originales). Usa el códec de
+Se usa para Crimson y Mangation, y para pasar a JPG las páginas que MangaDex no acepta (a Capibara van siempre
+los archivos originales). Usa el códec de
 Chromium en una ventana oculta con 1 a 3 hilos, sin librerías nativas, y se cierra solo tras un minuto sin
 trabajo. Cada página convertida se guarda en `%APPDATA%\CapiUploader\cache\webp` (se limpia sola a los
 3 días), así que los reintentos y las subidas a varias plataformas no la convierten otra vez. Las páginas de más
@@ -363,6 +426,29 @@ cada 6 horas. Si la hay, aparece un botón en la barra superior.
 Los scans y ajustes se conservan en todos los casos (`%APPDATA%\CapiUploader`). La app no está firmada, así
 que no se comprueba el editor del instalador; sí su sha512, que viene en `latest.yml`.
 
+### Versiones de prueba (beta)
+
+Antes de una versión grande se publica una de prueba, por ejemplo `1.5.0-beta.1`, para que algunos scans la
+usen y reporten fallas.
+
+- **Se publica como «pre-release» en GitHub**, nunca como «latest». Así quien tiene una versión final no la
+  recibe: la app solo mira el último release final (`/releases/latest`).
+- Quien instala una beta sí ve las versiones de prueba: pasa sola a la siguiente beta y, al salir la final, a
+  la final (`1.5.0` es más nueva que `1.5.0-beta.3`).
+- La beta también trae **`latest.yml`**, y hay que subirlo al release junto con el instalador y su `.blockmap`. No
+  afecta a las versiones finales, porque GitHub nunca da un pre-release como «latest». El actualizador de una
+  beta busca primero `beta.yml` y, si no está, usa `latest.yml`.
+- **Guía al abrir.** Con una versión de prueba instalada, cada vez que arranca la app se abre una ventana aparte
+  con la guía de lo que se prueba (`src/main/guides/beta-mangadex.md`, incluida en la app, así que se ve sin
+  conexión): cómo debería funcionar la subida a MangaDex paso a paso, qué no se debe subir, qué significan los
+  errores y cómo reportar una falla. También se abre desde Ajustes → «Ver guía». Con una versión final no aparece.
+- Para volver a la versión final antes de que salga la siguiente, se instala encima el Setup de la última final.
+  Los scans y ajustes se conservan.
+- Las fallas se reportan en [Issues](https://github.com/JRickOSanchez/CapiUploader/issues/new/choose) con el
+  formulario «Reportar una falla» (`.github/ISSUE_TEMPLATE/falla.yml`): versión, plataforma, pasos, mensaje y el
+  registro de Ajustes → Diagnóstico → «Copiar para soporte», que ya tapa contraseñas, API keys, el Client
+  Secret de MangaDex y los tokens. La versión instalada se ve en Ajustes, junto a «Novedades».
+
 ## Cómo funciona
 
 1. `POST /uploads` firma URLs para todas las páginas (lotes de 100).
@@ -424,7 +510,7 @@ La app instalada las ignora.
     (subir, descargar e importar) y `platforms.js` (plataforma activa, sesiones, obras y capítulos de
     Crimson y Mangation).
   - `platforms/`: `index.js` (lo que permite cada plataforma y la subida a varias), `http.js` (peticiones con
-    ritmo por plataforma, reintentos y multipart leído del disco), `crimson.js` y `mangation.js` (cliente y
+    ritmo por plataforma, reintentos y multipart leído del disco), `crimson.js`, `mangation.js` y `mangadex.js` (cliente y
     sesión de cada una). `webp.js` es el convertidor (con `renderer/converter.html` y
     `preload/converter.js`).
   - Lógica sin Electron, probada en `test/`: `api.js` (cliente de la API), `upload.js` (subida de un
@@ -443,7 +529,7 @@ La app instalada las ignora.
   - `js/` se carga en este orden: `core.js` (utilidades, estado, tema, avisos, preguntas y los eventos
     `on`/`emit` entre secciones), `platforms.js` (plataforma activa y cuentas), `scans.js`, `works.js`, `names.js`, `picker.js`, `single.js` (Un
     capítulo), `batch.js`, `uploaded.js` y `batch-upload.js` (Varios capítulos), `joints.js` (barra y ventana de los joints),
-    `download.js`, `import.js`, `newwork.js`, `newwork-alt.js` (obra nueva en Crimson y Mangation), `also.js` («También a…»),
+    `download.js`, `import.js`, `newwork.js`, `newwork-alt.js` (obra nueva en Crimson y Mangation), `also.js` («También a…»), `mangadex.js` (cuenta y obras de MangaDex),
     `update.js`, `settings.js` (Ajustes), `diagnostics.js`, `views.js` y `boot.js`, que inicia todo al final.
   - `whatsnew.html` con `js/whatsnew-window.js` y `css/whatsnew.css` es la ventana de novedades, aparte de la
     principal.

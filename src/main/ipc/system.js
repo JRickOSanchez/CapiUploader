@@ -1,5 +1,5 @@
 /** Tema, ajustes, enlaces externos, actualizaciones y novedades. */
-const { app, nativeTheme, shell } = require('electron')
+const { app, ipcMain, nativeTheme, shell } = require('electron')
 const store = require('../store')
 const updater = require('../updater')
 const mainWindow = require('../window')
@@ -21,6 +21,8 @@ function register() {
   handle('settings:get', async () => ({
     hardwareAcceleration: store.get('hardwareAcceleration') !== false,
     gpu: app.isHardwareAccelerationEnabled(),
+    version: app.getVersion(),
+    beta: whatsnew.isBeta(),
   }))
   handle('settings:setHardwareAcceleration', async (on) => {
     store.set('hardwareAcceleration', Boolean(on))
@@ -43,10 +45,14 @@ function register() {
     return true
   })
 
-  // Ventana «Novedades» (notas del release de la versión instalada).
+  // Ventana «Novedades» (notas del release de la versión instalada) y guía de la versión de prueba.
   handle('whatsnew:open', async () => { whatsnew.open(mainWindow.getWindow()); return true })
-  handle('whatsnew:data', async () => whatsnew.data())
-  handle('whatsnew:close', async () => { whatsnew.close(); return true })
+  handle('guide:open', async () => { whatsnew.open(mainWindow.getWindow(), { mode: 'guide' }); return true })
+  // Reglas de subida de MangaDex (traducidas, incluidas en la app).
+  handle('rules:open', async () => { whatsnew.open(mainWindow.getWindow(), { mode: 'rules' }); return true })
+  handle('whatsnew:data', async (mode) => whatsnew.data(whatsnew.MODES.includes(mode) ? mode : 'notes'))
+  // Cierra solo la ventana que lo pide (pueden estar abiertas las novedades y la guía).
+  ipcMain.handle('whatsnew:close', (e) => { whatsnew.close(e.sender); return { ok: true, data: true } })
 
   handle('update:state', async () => updater.state())
   handle('update:check', async () => updater.check({ manual: true }))

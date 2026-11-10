@@ -251,7 +251,10 @@ function applyChapterSuggestions() {
       ? String(Math.floor(latestExtraNumber(state.chapters)) + 1)
       : last ? String(Math.floor(last.number) + 1) : '1'
   }
-  if (state.autoVolume) {
+  // MangaDex: el tomo no se adivina por el capítulo anterior (sus reglas lo piden así).
+  if (state.autoVolume && state.platform === 'mangadex') {
+    $('#chVolume').value = ''
+  } else if (state.autoVolume) {
     $('#chVolume').value = last?.volumeNumber != null ? String(last.volumeNumber) : ''
   }
 }

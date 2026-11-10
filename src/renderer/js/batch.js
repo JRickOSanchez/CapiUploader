@@ -196,6 +196,8 @@ function readDefaultVolume() {
 
 function defaultVolumeFor(workId) {
   if (!batch.volumeAuto) return readDefaultVolume()
+  // MangaDex: el tomo no se adivina por el capítulo anterior; solo cuenta si la carpeta lo dice («Vol 3»).
+  if (state.platform === 'mangadex') return null
   return workLatest(workId)?.volumeNumber ?? null
 }
 
@@ -546,6 +548,7 @@ function batchValidate() {
       else if (it.volume != null && (!Number.isInteger(it.volume) || it.volume < 0)) { err = 'El tomo debe ser un número entero.'; always = true }
       else if (it.files.length > MAX_PAGES) { err = `Tiene ${it.files.length} páginas (máximo ${MAX_PAGES}).`; always = true }
       else if (it.files.some((f) => f.size > MAX_BYTES)) { err = 'Tiene imágenes de más de 40 MB.'; always = true }
+      else if (goesToMangadex() && mdxChapterProblem({ title: it.title })) { err = mdxChapterProblem({ title: it.title }); always = true }
       else if (s.publishAt && s.publishAt.getTime() > now + YEAR_MS) { err = 'Su fecha de publicación queda a más de 1 año (máximo de la API).'; always = true }
     }
     if (err) bad++

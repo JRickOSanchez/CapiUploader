@@ -9,7 +9,7 @@ const queue = []
 function spawn() {
   const w = new Worker('js/converter-worker.js')
   w.onmessage = ({ data }) => {
-    window.converter.done(data.id, data.ok ? { ok: true, bytes: new Uint8Array(data.bytes), width: data.width, height: data.height, resized: data.resized, srcWidth: data.srcWidth, srcHeight: data.srcHeight } : { ok: false, error: data.error })
+    window.converter.done(data.id, data.ok ? { ok: true, bytes: new Uint8Array(data.bytes), parts: (data.parts || [data.bytes]).map((b) => new Uint8Array(b)), width: data.width, height: data.height, resized: data.resized, srcWidth: data.srcWidth, srcHeight: data.srcHeight } : { ok: false, error: data.error })
     next(w)
   }
   w.onerror = (e) => { e.preventDefault() }

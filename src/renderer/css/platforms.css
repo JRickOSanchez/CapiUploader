@@ -14,6 +14,7 @@ body:not([data-caps~="notify"]) [data-cap="notify"],
 body:not([data-caps~="publish"]) [data-cap="publish"],
 body:not([data-caps~="download"]) [data-cap="download"],
 body:not([data-caps~="languages"]) [data-cap="languages"],
+body:not([data-caps~="import"]) [data-cap="import"],
 body[data-caps~="volume"] [data-cap-not="volume"] { display: none !important; }
 body:not([data-caps~="singles"]) .thumb-single,
 body:not([data-caps~="singles"]) .ch-meta .singles,
@@ -30,6 +31,7 @@ body:not([data-caps~="volume"]) .column-form .grid-2:has(#chNumber) { grid-templ
 [data-platform="capibara"] > .platform-mark, .platform-mark[data-platform="capibara"], .platform-item[data-platform="capibara"] .platform-mark { background: #12b5d9; color: #fff; }
 [data-platform="crimson"] > .platform-mark, .platform-mark[data-platform="crimson"], .platform-item[data-platform="crimson"] .platform-mark { background: #ff2d6f; color: #fff; border-radius: 50%; }
 [data-platform="mangation"] > .platform-mark, .platform-mark[data-platform="mangation"], .platform-item[data-platform="mangation"] .platform-mark { background: #d9cff5; color: #1d1a26; border-radius: 9px; }
+[data-platform="mangadex"] > .platform-mark, .platform-mark[data-platform="mangadex"], .platform-item[data-platform="mangadex"] .platform-mark, #mdxWorkModal .platform-mark { background: #ff6740; color: #fff; border-radius: 6px; }
 .modal-icon.platform-mark { width: 42px; height: 42px; border-radius: 12px; font-size: 14px; }
 
 /* ---------- Botón y menú de plataforma (junto al chip del scan) ---------- */
@@ -109,6 +111,36 @@ body.uploading .also-btn { pointer-events: none; opacity: .6; }
   background: var(--success-soft); color: var(--text-2); border: 1px solid var(--border);
 }
 .account-form { display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------- MangaDex: cliente de la API, grupo, reglas y obras agregadas ---------- */
+.account-mdx { display: flex; flex-direction: column; gap: 12px; }
+.account-mdx[hidden] { display: none; }
+.account-card:has(.account-mdx:not([hidden])) { max-height: calc(100vh - 48px); overflow-y: auto; }
+.mdx-groups { font-size: 12.5px; color: var(--text-2); margin: 4px 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mdx-group-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 10px; border-radius: 6px; background: var(--surface-3); }
+.mdx-group-chip b { color: var(--text); font-weight: 600; }
+.mdx-group-chip .icon-btn { width: 24px; height: 24px; }
+.mdx-nogroup { margin-top: 8px; }
+.mdx-nogroup[hidden] { display: none; }
+.mdx-results li button .mdx-added { margin-left: auto; }
+.mdx-results {
+  list-style: none; margin: 6px 0 0; padding: 4px; display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); max-height: 220px; overflow-y: auto;
+}
+.mdx-results[hidden] { display: none; }
+.mdx-results li button {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 0; border-radius: 8px;
+  background: none; color: var(--text); text-align: left; font: inherit; font-size: 13px; cursor: pointer;
+}
+.mdx-results li button:hover, .mdx-results li button:focus-visible { background: var(--accent-soft); }
+.mdx-results li.empty { padding: 10px; color: var(--text-3); font-size: 12.5px; text-align: center; }
+.mdx-results .cover { width: 30px; height: 42px; }
+.mdx-results .mdx-added { margin-left: auto; font-size: 11px; color: var(--success); font-weight: 700; }
+.mdx-works { max-height: 340px; margin-top: 10px; }
+.mdx-work-card { width: min(560px, 100%); }
+.mdx-terms { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+.mdx-terms input { margin-top: 3px; flex: none; }
+.mdx-terms a { color: var(--accent-text); }
 
 /* ---------- Obra nueva en Crimson / Mangation ---------- */
 .altwork-card { width: min(760px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; }

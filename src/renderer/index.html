@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/platforms.css" />
   <link rel="stylesheet" href="css/platform-crimson.css" />
   <link rel="stylesheet" href="css/platform-mangation.css" />
+  <link rel="stylesheet" href="css/platform-mangadex.css" />
 </head>
 <body>
   <!-- ===== Barra superior ===== -->
@@ -297,7 +298,7 @@
             <button type="button" class="btn ghost small" id="batchSortBtn" title="Ordenar por número de capítulo">
               <svg viewBox="0 0 24 24"><path d="M3 6h10M3 12h7M3 18h4m10-12v14m0 0-3-3m3 3 3-3"/></svg>Ordenar
             </button>
-            <button type="button" class="btn ghost small" id="batchImportBtn" title="Traer capítulos de otra web (se abre en otra ventana)">
+            <button type="button" class="btn ghost small" id="batchImportBtn" data-cap="import" title="Traer capítulos de otra web (se abre en otra ventana)">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Importar de web
             </button>
             <button type="button" class="btn ghost small" id="batchAddBtn" title="Agregar más carpetas">
@@ -322,7 +323,7 @@
             <div class="dz-actions">
               <button type="button" class="btn primary" id="batchPickBtn">Seleccionar carpetas</button>
               <button type="button" class="btn secondary" id="batchPickArchivesBtn">Seleccionar comprimidos</button>
-              <button type="button" class="btn secondary" id="batchImportEmpty" title="Se abre en otra ventana"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Importar de otra web</button>
+              <button type="button" class="btn secondary" id="batchImportEmpty" data-cap="import" title="Se abre en otra ventana"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Importar de otra web</button>
             </div>
             <p class="dz-formats">El número se toma del nombre: «Cap 12», «Capítulo 12.5», «Vol 3 Ch 20 - Título», «013»… · También acepta PSD y comprimidos (ZIP, CBZ, RAR, CBR, 7Z, TAR)</p>
           </div>
@@ -726,14 +727,68 @@
             </button>
           </div>
         </label>
+        <!-- Solo MangaDex: cliente personal de la API, idioma, grupo y reglas -->
+        <div class="account-mdx" id="accountMdx" hidden>
+          <label class="field">
+            <span class="label">Client ID</span>
+            <input type="text" id="mdxClientId" spellcheck="false" autocomplete="off" placeholder="personal-client-…" />
+          </label>
+          <label class="field">
+            <span class="label">Client Secret</span>
+            <input type="password" id="mdxClientSecret" autocomplete="off" />
+          </label>
+          <p class="hint">Se crean en mangadex.org → Settings → API Clients («personal client»). MangaDex puede tardar en aprobarlo; hasta entonces no deja entrar.</p>
+          <label class="field">
+            <span class="label">Idioma de tus traducciones</span>
+            <select id="mdxLang"></select>
+          </label>
+          <div class="field">
+            <span class="label">Grupos de scanlation</span>
+            <p class="hint">Marca todos los grupos que trabajan tus capítulos (hasta 10). Si no tienes grupo, crea en MangaDex uno con tu nombre de usuario y elígelo aquí.</p>
+            <div class="mdx-groups" id="mdxGroupCurrent"></div>
+            <input type="text" id="mdxGroupSearch" placeholder="Busca un grupo por nombre o pega su enlace" spellcheck="false" autocomplete="off" />
+            <ul class="mdx-results" id="mdxGroupResults" hidden></ul>
+            <label class="mdx-terms mdx-nogroup" id="mdxNoGroupRow">
+              <input type="checkbox" id="mdxNoGroup" />
+              <span>Subir <b>sin grupo</b> («Not affiliated with any group»). Solo si eres <b>el autor</b> de la obra o <b>un traductor autorizado</b> por él.</span>
+            </label>
+          </div>
+          <label class="mdx-terms">
+            <input type="checkbox" id="mdxTerms" />
+            <span>Leí y acepto las <a href="#" id="mdxRulesLink">reglas</a> y los <a href="#" id="mdxTermsLink">términos de subida</a> de MangaDex. Solo subiré trabajo de mis grupos (nada oficial, de otros grupos ni de agregadores).</span>
+          </label>
+        </div>
         <span class="hint error" id="accountError"></span>
-        <p class="hint">La contraseña no se guarda: solo la sesión, cifrada con el almacén seguro de Windows.</p>
+        <p class="hint" id="accountNote">La contraseña no se guarda: solo la sesión, cifrada con el almacén seguro de Windows.</p>
       </form>
       <div class="modal-actions">
         <button type="button" class="btn ghost danger" id="accountOut" hidden>Cerrar sesión</button>
         <span class="spacer"></span>
         <button type="button" class="btn ghost" id="accountCancel">Cerrar</button>
         <button type="button" class="btn primary" id="accountSave">Iniciar sesión</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MangaDex: agregar una obra que ya existe -->
+  <div class="modal" id="mdxWorkModal" hidden>
+    <div class="modal-card mdx-work-card" role="dialog" aria-modal="true" aria-labelledby="mdxWorkTitle">
+      <div class="modal-head">
+        <div class="modal-icon platform-mark" aria-hidden="true">MD</div>
+        <div>
+          <h3 id="mdxWorkTitle">Agregar obra de MangaDex</h3>
+          <p class="muted">Solo se sube a obras que ya existen en MangaDex. Las del grupo de tu cuenta aparecen solas; aquí agregas otras.</p>
+        </div>
+      </div>
+      <label class="field">
+        <span class="label">Título o enlace de la obra</span>
+        <input type="text" id="mdxWorkSearch" placeholder="Ej. «Choujin X» o https://mangadex.org/title/…" spellcheck="false" autocomplete="off" />
+      </label>
+      <ul class="mdx-results mdx-works" id="mdxWorkResults"></ul>
+      <span class="hint error" id="mdxWorkError"></span>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="mdxWorkCancel">Cerrar</button>
       </div>
     </div>
   </div>
@@ -825,9 +880,16 @@
       <div class="option">
         <div class="option-text">
           <span class="option-title">Novedades</span>
-          <span class="option-desc">Qué trae la versión que tienes instalada.</span>
+          <span class="option-desc" id="prefsNewsDesc">Qué trae la versión que tienes instalada.</span>
         </div>
         <button type="button" class="btn secondary small" id="prefsNews">Ver novedades</button>
+      </div>
+      <div class="option" id="prefsGuideRow" hidden>
+        <div class="option-text">
+          <span class="option-title">Guía de la versión de prueba</span>
+          <span class="option-desc">Cómo debería funcionar la subida a MangaDex en esta versión y cómo reportar fallas.</span>
+        </div>
+        <button type="button" class="btn secondary small" id="prefsGuide">Ver guía</button>
       </div>
       <div class="modal-actions">
         <span class="spacer"></span>
@@ -1112,6 +1174,7 @@
   <script src="js/newwork.js"></script>
   <script src="js/newwork-alt.js"></script>
   <script src="js/also.js"></script>
+  <script src="js/mangadex.js"></script>
   <script src="js/update.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/diagnostics.js"></script>

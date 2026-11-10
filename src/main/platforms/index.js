@@ -1,9 +1,11 @@
 /**
  * Plataformas a las que se puede subir: Capibara (API key por scan), ScanCrimson y Mangation (sesión
- * con usuario y contraseña). Aquí está lo que cada una permite (la interfaz oculta lo demás) y la
+ * con usuario y contraseña) y MangaDex (OAuth con el cliente personal de la cuenta; solo obras que ya
+ * existen allí). Aquí está lo que cada una permite (la interfaz oculta lo demás) y la
  * subida a varias a la vez:
  *   - las páginas se leen una vez; la conversión a WebP (solo Crimson y Mangation) se hace una vez y
- *     la comparten;
+ *     la comparten; MangaDex recibe JPG, PNG o GIF tal cual y el resto se convierte a JPG (las tiras
+ *     de 10 000 px o más se cortan en partes);
  *   - Capibara empieza a subir mientras se convierten las páginas de las otras;
  *   - cada plataforma lleva su propio ritmo y sus reintentos; si una falla, las demás siguen, y al
  *     reintentar solo se vuelve a subir a la que falló;
@@ -14,14 +16,16 @@ const joints = require('../joints')
 const capibaraUpload = require('../upload')
 const crimson = require('./crimson')
 const mangation = require('./mangation')
+const mangadex = require('./mangadex')
 // El convertidor usa Electron: se carga solo cuando hace falta (y las pruebas no lo necesitan).
 const webp = () => require('../webp')
 const { describeFile } = require('../files')
 const diagnostics = require('../diagnostics')
+const { pool } = require('../util')
 
-const IDS = ['capibara', 'crimson', 'mangation']
-const LABELS = { capibara: 'Capibara', crimson: 'ScanCrimson', mangation: 'Mangation' }
-const remote = { crimson, mangation }
+const IDS = ['capibara', 'crimson', 'mangation', 'mangadex']
+const LABELS = { capibara: 'Capibara', crimson: 'ScanCrimson', mangation: 'Mangation', mangadex: 'MangaDex' }
+const remote = { crimson, mangation, mangadex }
 const EXISTING_TTL = 2 * 60e3
 
 const isId = (p) => IDS.includes(p)
@@ -36,10 +40,11 @@ function info() {
       maxGenres: mangation.MAX_GENRES, maxTitle: mangation.MAX_TITLE, maxDescription: mangation.MAX_DESCRIPTION,
       maxCoverBytes: mangation.MAX_COVER_BYTES, maxChapterBytes: mangation.MAX_CHAPTER_BYTES,
     },
+    mangadex: { languages: mangadex.LANGUAGES, rulesUrl: mangadex.RULES_URL, termsUrl: mangadex.TERMS_URL },
   }
 }
 
-const sessions = () => ({ crimson: crimson.status(), mangation: mangation.status() })
+const sessions = () => ({ crimson: crimson.status(), mangation: mangation.status(), mangadex: mangadex.status() })
 
 /* ---------- Lecturas ---------- */
 
@@ -94,6 +99,7 @@ const markUploaded = (platform, workId, number) => existing.get(`${platform}|${w
 function chapterFor(platform, chapter) {
   if (platform === 'capibara') return chapter
   const c = { number: Number(chapter.number), title: chapter.title || null }
+  if (platform === 'mangadex') { c.volumeNumber = chapter.volumeNumber ?? null; c.publishAt = chapter.publishAt || null }
   if (platform === 'crimson') { c.publishAt = chapter.publishAt || null; c.notify = chapter.notify !== false }
   return c
 }
@@ -166,6 +172,30 @@ function progressMixer(targets, count, totalBytes, emit) {
   }
 }
 const CONVERT_SHARE = 0.3
+
+/**
+ * Las páginas como las acepta MangaDex: las JPG, PNG o GIF que ya cumplen van tal cual; las demás
+ * se convierten a JPG (una tira larga sale en varias partes). origin: índice de la página original.
+ */
+async function mangadexPages(pages, signal, onFile) {
+  const out = new Array(pages.length)
+  let done = 0
+  await pool(pages.map((_, i) => i), 3, async (i) => {
+    const f = pages[i]
+    let list
+    try {
+      list = (await mangadex.needsConversion(f))
+        ? await webp().toMangadexParts(f, signal)
+        : [{ path: f.path, name: f.name, type: f.type, size: f.size }]
+    } catch (err) {
+      if (err.code === 'cancelled') throw err
+      throw Object.assign(new Error(`No se pudo preparar la página ${i + 1} (${f.name}) para MangaDex: ${err.message}`), { code: 'mangadex.convert_failed' })
+    }
+    out[i] = list.map((p) => ({ ...p, origin: i }))
+    onFile(++done)
+  }, signal)
+  return out.flat()
+}
 const convertShareOf = (p) => (p === 'capibara' ? 0 : CONVERT_SHARE)
 
 /**
@@ -218,6 +248,23 @@ async function upload(payload, { key, signal, onProgress = () => {} }) {
     if (chapter.extra) {
       mixer.status(platform, 'skipped', { reason: 'no tiene extras' })
       return { skipped: true, reason: `${LABELS[platform]} no tiene extras.` }
+    }
+    if (platform === 'mangadex') {
+      return mangadex.withSession(async (_token, user, settings) => {
+        if (targets.length > 1 && await alreadyThere(platform, t.workId, chapter.number, signal).catch(() => false)) {
+          mixer.status(platform, 'skipped', { reason: 'ya estaba' })
+          return { skipped: true, reason: 'Ya estaba subido.', number: Number(chapter.number) }
+        }
+        mixer.status(platform, 'converting')
+        const files = await mangadexPages(pages, signal, (done) => mixer.converted(platform, done))
+        mixer.status(platform, 'uploading')
+        // La subida pide el token vigente en cada paso: un capítulo grande dura más que sus 15 minutos.
+        const data = await mangadex.uploadChapter(() => mangadex.accessToken(), {
+          user, settings, workId: String(t.workId), chapter: chapterFor(platform, chapter), files, signal, onProgress: report,
+        })
+        markUploaded(platform, t.workId, chapter.number)
+        return data
+      })
     }
     const mod = remote[platform]
     return mod.withSession(async (session, user) => {
@@ -286,6 +333,7 @@ const signIn = (platform, creds) => remoteOf(platform).signIn(creds)
 const signOut = (platform) => remoteOf(platform).signOut()
 
 async function createWork(platform, fields, images) {
+  if (platform === 'mangadex') throw new Error('En MangaDex solo se sube a obras que ya existen: agrégala desde «Agregar obra».')
   const mod = remoteOf(platform)
   const prepared = {}
   for (const kind of ['cover', 'banner']) {
@@ -303,7 +351,7 @@ async function createWork(platform, fields, images) {
 
 async function deleteChapter(platform, workId, chapterId) {
   const mod = remoteOf(platform)
-  const ok = await mod.withSession((s) => (platform === 'crimson' ? mod.deleteChapter(s, chapterId) : mod.deleteChapter(s, String(workId), chapterId)))
+  const ok = await mod.withSession((s) => (platform === 'mangation' ? mod.deleteChapter(s, String(workId), chapterId) : mod.deleteChapter(s, chapterId)))
   existing.delete(`${platform}|${workId}`)
   return ok
 }
@@ -318,6 +366,7 @@ async function renumberChapter(platform, workId, chapterId, number) {
 const genres = (platform) => (platform === 'mangation' ? mangation.listGenres() : crimson.GENRES.map((name) => ({ id: name, name })))
 
 module.exports = {
+  mangadex,
   IDS, LABELS, isId, info, sessions, works, chapters, upload, signIn, signOut, createWork, deleteChapter, renumberChapter, genres,
   _progressMixer: progressMixer,
 }

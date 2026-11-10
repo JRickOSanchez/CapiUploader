@@ -58,3 +58,14 @@ body.wn { height: 100vh; margin: 0; display: flex; flex-direction: column; overf
 
 .wn-foot { display: flex; align-items: center; gap: 8px; padding: 14px 28px; border-top: 1px solid var(--border); background: var(--surface); }
 .wn-spacer { flex: 1; }
+
+/* Guía de la versión de prueba (?modo=guia): con el naranja de MangaDex, que es lo que se prueba. */
+body.wn-guide {
+  --accent: #ff6740;
+  --accent-2: #ff7d5a;
+  --accent-soft: rgba(255, 103, 64, .16);
+  --accent-text: #ff7d5a;
+}
+[data-theme="light"] body.wn-guide { --accent-text: #e2491f; }
+body.wn-guide .wn-heading h1 { font-style: normal; text-transform: none; font-size: 24px; }
+body.wn-guide .wn-notes ol > li::marker { color: var(--accent-text); font-weight: 700; }

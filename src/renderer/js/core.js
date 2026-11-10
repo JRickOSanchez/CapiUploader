@@ -281,7 +281,7 @@ let askChain = Promise.resolve()
  * Con `input` ({ label, value, type }) muestra un campo y resuelve con { value, input }; Enter
  * en el campo elige el botón principal.
  */
-function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, input = null }) {
+function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, input = null, wrap = false }) {
   const run = () => new Promise((resolve) => {
     const modal = $('#askModal')
     const cancel = buttons.find((b) => b.cancel) || buttons[0]
@@ -291,6 +291,8 @@ function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, in
     $('#askText').textContent = text
     const ul = $('#askList')
     ul.innerHTML = ''
+    // wrap: líneas largas (p. ej. reglas) en varias filas en lugar de cortarlas con «…».
+    ul.classList.toggle('wrap', wrap)
     list.forEach((line) => ul.append(el('li', { text: line })))
     if (more > 0) ul.append(el('li', { class: 'more', text: `…y ${more} más` }))
     ul.hidden = !list.length

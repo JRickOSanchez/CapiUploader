@@ -22,6 +22,9 @@ async function openPrefs() {
   if (!res.ok) return toast('error', 'No se pudieron leer los ajustes', res.error.message)
   prefs.gpu = res.data.hardwareAcceleration
   prefs.gpuActive = res.data.gpu
+  // La versión instalada (las de prueba llevan «-beta.N»): sirve para reportar fallas.
+  if (res.data.version) $('#prefsNewsDesc').textContent = `Qué trae la versión que tienes instalada: ${res.data.version}.`
+  $('#prefsGuideRow').hidden = !res.data.beta
   renderPrefs()
   $('#prefsModal').hidden = false
 }
@@ -47,5 +50,6 @@ function initSettings() {
   $('#prefGpu').addEventListener('change', (e) => setGpu(e.target.checked))
   $('#prefsRelaunch').addEventListener('click', relaunchApp)
   $('#prefsNews').addEventListener('click', () => { closePrefs(); window.capi.settings.openWhatsNew() })
+  $('#prefsGuide').addEventListener('click', () => { closePrefs(); window.capi.settings.openGuide() })
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#prefsModal').hidden) closePrefs() })
 }

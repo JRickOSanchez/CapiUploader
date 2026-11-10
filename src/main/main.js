@@ -54,6 +54,8 @@ app.whenReady().then(() => {
   const win = openMainWindow()
   scrape.init(win)
   whatsnew.showIfUpdated(win)
+  // Versión de prueba: la guía de cómo se sube a MangaDex se abre siempre al arrancar.
+  whatsnew.showBetaGuide(win)
   updater.init((s) => mainWindow.send('update:state', s))
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) openMainWindow()
