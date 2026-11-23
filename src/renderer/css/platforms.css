@@ -1,8 +1,8 @@
 /* =========================================================
    Plataformas: botón para cambiar de plataforma, lo que cada
    una no tiene (data-cap), «También a…», cuenta y obra nueva
-   de Crimson y Mangation. Los temas de cada plataforma están
-   en platform-crimson.css y platform-mangation.css.
+   de Mangation. El tema de cada plataforma está
+   en platform-mangation.css.
    ========================================================= */
 
 /* Lo que la plataforma activa no tiene se oculta (body[data-caps] lo pone platforms.js). */
@@ -14,7 +14,6 @@ body:not([data-caps~="notify"]) [data-cap="notify"],
 body:not([data-caps~="publish"]) [data-cap="publish"],
 body:not([data-caps~="download"]) [data-cap="download"],
 body:not([data-caps~="languages"]) [data-cap="languages"],
-body:not([data-caps~="import"]) [data-cap="import"],
 body[data-caps~="volume"] [data-cap-not="volume"] { display: none !important; }
 body:not([data-caps~="singles"]) .thumb-single,
 body:not([data-caps~="singles"]) .ch-meta .singles,
@@ -29,9 +28,7 @@ body:not([data-caps~="volume"]) .column-form .grid-2:has(#chNumber) { grid-templ
   background: var(--accent); color: var(--on-accent); font: 900 10px/1 var(--font); letter-spacing: -.02em;
 }
 [data-platform="capibara"] > .platform-mark, .platform-mark[data-platform="capibara"], .platform-item[data-platform="capibara"] .platform-mark { background: #12b5d9; color: #fff; }
-[data-platform="crimson"] > .platform-mark, .platform-mark[data-platform="crimson"], .platform-item[data-platform="crimson"] .platform-mark { background: #ff2d6f; color: #fff; border-radius: 50%; }
 [data-platform="mangation"] > .platform-mark, .platform-mark[data-platform="mangation"], .platform-item[data-platform="mangation"] .platform-mark { background: #d9cff5; color: #1d1a26; border-radius: 9px; }
-[data-platform="mangadex"] > .platform-mark, .platform-mark[data-platform="mangadex"], .platform-item[data-platform="mangadex"] .platform-mark, #mdxWorkModal .platform-mark { background: #ff6740; color: #fff; border-radius: 6px; }
 .modal-icon.platform-mark { width: 42px; height: 42px; border-radius: 12px; font-size: 14px; }
 
 /* ---------- Botón y menú de plataforma (junto al chip del scan) ---------- */
@@ -46,7 +43,6 @@ body:not([data-caps~="volume"]) .column-form .grid-2:has(#chNumber) { grid-templ
 .platform-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
 .platform-btn .platform-mark { width: 22px; height: 22px; }
 body[data-platform="capibara"] .platform-btn .platform-mark { background: #12b5d9; color: #fff; }
-body[data-platform="crimson"] .platform-btn .platform-mark { background: #ff2d6f; color: #fff; border-radius: 50%; }
 body[data-platform="mangation"] .platform-btn .platform-mark { background: #d9cff5; color: #1d1a26; }
 .platform-pop { width: 320px; }
 .platform-item .platform-mark { width: 32px; height: 32px; font-size: 12px; border-radius: 10px; }
@@ -65,7 +61,6 @@ body[data-window="import"] .platform-btn .chev { display: none; }
 .also-dots:empty { display: none; }
 .also-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .also-dot[data-platform="capibara"] { background: #12b5d9; }
-.also-dot[data-platform="crimson"] { background: #ff2d6f; }
 .also-dot[data-platform="mangation"] { background: #b9a7ef; }
 body.uploading .also-btn { pointer-events: none; opacity: .6; }
 .also-pop {
@@ -104,7 +99,7 @@ body.uploading .also-btn { pointer-events: none; opacity: .6; }
 .pp[data-status="error"] .pp-state { color: var(--danger); }
 .pp[data-status="uploading"] .pp-state, .pp[data-status="converting"] .pp-state { color: var(--accent-text); }
 
-/* ---------- Cuenta de Crimson / Mangation ---------- */
+/* ---------- Cuenta de Mangation ---------- */
 .account-card { width: min(460px, 100%); }
 .account-status {
   margin-bottom: 14px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px;
@@ -112,51 +107,17 @@ body.uploading .also-btn { pointer-events: none; opacity: .6; }
 }
 .account-form { display: flex; flex-direction: column; gap: 12px; }
 
-/* ---------- MangaDex: cliente de la API, grupo, reglas y obras agregadas ---------- */
-/* El idioma de cada capítulo solo se ve cuando la subida va a MangaDex (body.to-mangadex). */
-body:not(.to-mangadex) .mdx-only { display: none !important; }
-.ch-field.ch-lang select { height: 34px; padding: 0 26px 0 8px; font-size: 12px; font-weight: 700; background-position: calc(100% - 13px) 15px, calc(100% - 8px) 15px; }
-.account-mdx { display: flex; flex-direction: column; gap: 12px; }
-.account-mdx[hidden] { display: none; }
-.account-card:has(.account-mdx:not([hidden])) { max-height: calc(100vh - 48px); overflow-y: auto; }
-.mdx-groups { font-size: 12.5px; color: var(--text-2); margin: 4px 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.mdx-group-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 10px; border-radius: 6px; background: var(--surface-3); }
-.mdx-group-chip b { color: var(--text); font-weight: 600; }
-.mdx-group-chip .icon-btn { width: 24px; height: 24px; }
-.mdx-nogroup { margin-top: 8px; }
-.mdx-nogroup[hidden] { display: none; }
-.mdx-results li button .mdx-added { margin-left: auto; }
-.mdx-results {
-  list-style: none; margin: 6px 0 0; padding: 4px; display: flex; flex-direction: column; gap: 2px;
-  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); max-height: 220px; overflow-y: auto;
-}
-.mdx-results[hidden] { display: none; }
-.mdx-results li button {
-  width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 0; border-radius: 8px;
-  background: none; color: var(--text); text-align: left; font: inherit; font-size: 13px; cursor: pointer;
-}
-.mdx-results li button:hover, .mdx-results li button:focus-visible { background: var(--accent-soft); }
-.mdx-results li.empty { padding: 10px; color: var(--text-3); font-size: 12.5px; text-align: center; }
-.mdx-results .cover { width: 30px; height: 42px; }
-.mdx-results .mdx-added { margin-left: auto; font-size: 11px; color: var(--success); font-weight: 700; }
-.mdx-works { max-height: 340px; margin-top: 10px; }
-.mdx-work-card { width: min(560px, 100%); }
-.mdx-terms { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
-.mdx-terms input { margin-top: 3px; flex: none; }
-.mdx-terms a { color: var(--accent-text); }
-
-/* ---------- Obra nueva en Crimson / Mangation ---------- */
+/* ---------- Obra nueva en Mangation ---------- */
 .altwork-card { width: min(760px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; }
 .altwork-body { display: grid; grid-template-columns: 200px 1fr; gap: 18px; }
 .altwork-images { display: flex; flex-direction: column; gap: 10px; }
-.altwork-cover, .altwork-banner {
+.altwork-cover {
   position: relative; display: grid; place-items: center; overflow: hidden; padding: 0; cursor: pointer;
   border: 1px dashed var(--border-strong); border-radius: 14px; background: var(--surface-2); color: var(--text-3);
 }
 .altwork-cover { aspect-ratio: 2 / 3; }
-.altwork-banner { aspect-ratio: 16 / 5; }
-.altwork-cover:hover, .altwork-banner:hover { border-color: var(--accent); color: var(--accent-text); }
-.altwork-cover img, .altwork-banner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.altwork-cover:hover { border-color: var(--accent); color: var(--accent-text); }
+.altwork-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .altwork-ph { display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 800; font-size: 13px; }
 .altwork-ph small { font-weight: 600; font-size: 11px; }
 .altwork-fields { display: flex; flex-direction: column; gap: 12px; min-width: 0; }

@@ -1,11 +1,8 @@
 /**
- * Plataformas a las que se puede subir: Capibara (API key por scan), ScanCrimson y Mangation (sesión
- * con usuario y contraseña) y MangaDex (OAuth con el cliente personal de la cuenta; solo obras que ya
- * existen allí). Aquí está lo que cada una permite (la interfaz oculta lo demás) y la
+ * Plataformas a las que se puede subir: Capibara (API key por scan) y Mangation (sesión con usuario
+ * y contraseña). Aquí está lo que cada una permite (la interfaz oculta lo demás) y la
  * subida a varias a la vez:
- *   - las páginas se leen una vez; la conversión a WebP (solo Crimson y Mangation) se hace una vez y
- *     la comparten; MangaDex recibe JPG, PNG o GIF tal cual y el resto se convierte a JPG (las tiras
- *     de 10 000 px o más se cortan en partes);
+ *   - las páginas se leen una vez; la conversión a WebP (solo Mangation) se hace una vez;
  *   - Capibara empieza a subir mientras se convierten las páginas de las otras;
  *   - cada plataforma lleva su propio ritmo y sus reintentos; si una falla, las demás siguen, y al
  *     reintentar solo se vuelve a subir a la que falló;
@@ -14,37 +11,32 @@
 const api = require('../api')
 const joints = require('../joints')
 const capibaraUpload = require('../upload')
-const crimson = require('./crimson')
 const mangation = require('./mangation')
-const mangadex = require('./mangadex')
 // El convertidor usa Electron: se carga solo cuando hace falta (y las pruebas no lo necesitan).
 const webp = () => require('../webp')
 const { describeFile } = require('../files')
 const diagnostics = require('../diagnostics')
-const { pool } = require('../util')
 
-const IDS = ['capibara', 'crimson', 'mangation', 'mangadex']
-const LABELS = { capibara: 'Capibara', crimson: 'ScanCrimson', mangation: 'Mangation', mangadex: 'MangaDex' }
-const remote = { crimson, mangation, mangadex }
+const IDS = ['capibara', 'mangation']
+const LABELS = { capibara: 'Capibara', mangation: 'Mangation' }
+const remote = { mangation }
 const EXISTING_TTL = 2 * 60e3
 
 const isId = (p) => IDS.includes(p)
 const assertId = (p) => { if (!isId(p)) throw new Error('Plataforma no válida.'); return p }
 
-/** Lo que la interfaz necesita saber de Crimson y Mangation (opciones de sus formularios). */
+/** Lo que la interfaz necesita saber de Mangation (opciones de sus formularios). */
 function info() {
   return {
-    crimson: { types: crimson.TYPES, statuses: crimson.STATUSES, genres: crimson.GENRES },
     mangation: {
       types: mangation.TYPES, statuses: mangation.STATUSES, demographies: mangation.DEMOGRAPHIES,
       maxGenres: mangation.MAX_GENRES, maxTitle: mangation.MAX_TITLE, maxDescription: mangation.MAX_DESCRIPTION,
       maxCoverBytes: mangation.MAX_COVER_BYTES, maxChapterBytes: mangation.MAX_CHAPTER_BYTES,
     },
-    mangadex: { languages: mangadex.LANGUAGES, rulesUrl: mangadex.RULES_URL, termsUrl: mangadex.TERMS_URL },
   }
 }
 
-const sessions = () => ({ crimson: crimson.status(), mangation: mangation.status(), mangadex: mangadex.status() })
+const sessions = () => ({ mangation: mangation.status() })
 
 /* ---------- Lecturas ---------- */
 
@@ -74,14 +66,13 @@ async function chapters(platform, workId, key) {
 
 /* ---------- ¿Ya existe el capítulo? (plataformas secundarias) ---------- */
 
-const existing = new Map() // `${platform}|${workId}` -> { at, chapters: [{ number, lang }] }
+const existing = new Map() // `${platform}|${workId}` -> { at, numbers: Set }
 
 function rememberExisting(platform, workId, list) {
-  existing.set(`${platform}|${workId}`, { at: Date.now(), chapters: list.map((c) => ({ number: Number(c.number), lang: c.lang || null })) })
+  existing.set(`${platform}|${workId}`, { at: Date.now(), numbers: new Set(list.map((c) => Number(c.number))) })
 }
 
-/** ¿Ya está ese número? lang: solo cuenta en ese idioma (MangaDex: el 12 en español y en inglés son distintos). */
-async function alreadyThere(platform, workId, number, signal, lang = null) {
+async function alreadyThere(platform, workId, number, signal) {
   const k = `${platform}|${workId}`
   let e = existing.get(k)
   if (!e || Date.now() - e.at > EXISTING_TTL) {
@@ -89,20 +80,17 @@ async function alreadyThere(platform, workId, number, signal, lang = null) {
     rememberExisting(platform, workId, list)
     e = existing.get(k)
   }
-  return e.chapters.some((c) => c.number === Number(number) && (!lang || !c.lang || c.lang === lang))
+  return e.numbers.has(Number(number))
 }
 
-const markUploaded = (platform, workId, number, lang = null) => existing.get(`${platform}|${workId}`)?.chapters.push({ number: Number(number), lang })
+const markUploaded = (platform, workId, number) => existing.get(`${platform}|${workId}`)?.numbers.add(Number(number))
 
 /* ---------- Subida ---------- */
 
 /** Lo que entiende cada plataforma del capítulo (lo que no tiene, se omite). */
 function chapterFor(platform, chapter) {
   if (platform === 'capibara') return chapter
-  const c = { number: Number(chapter.number), title: chapter.title || null }
-  if (platform === 'mangadex') { c.volumeNumber = chapter.volumeNumber ?? null; c.publishAt = chapter.publishAt || null; c.lang = chapter.lang || null }
-  if (platform === 'crimson') { c.publishAt = chapter.publishAt || null; c.notify = chapter.notify !== false }
-  return c
+  return { number: Number(chapter.number), title: chapter.title || null }
 }
 
 /**
@@ -173,30 +161,6 @@ function progressMixer(targets, count, totalBytes, emit) {
   }
 }
 const CONVERT_SHARE = 0.3
-
-/**
- * Las páginas como las acepta MangaDex: las JPG, PNG o GIF que ya cumplen van tal cual; las demás
- * se convierten a JPG (una tira larga sale en varias partes). origin: índice de la página original.
- */
-async function mangadexPages(pages, signal, onFile) {
-  const out = new Array(pages.length)
-  let done = 0
-  await pool(pages.map((_, i) => i), 3, async (i) => {
-    const f = pages[i]
-    let list
-    try {
-      list = (await mangadex.needsConversion(f))
-        ? await webp().toMangadexParts(f, signal)
-        : [{ path: f.path, name: f.name, type: f.type, size: f.size }]
-    } catch (err) {
-      if (err.code === 'cancelled') throw err
-      throw Object.assign(new Error(`No se pudo preparar la página ${i + 1} (${f.name}) para MangaDex: ${err.message}`), { code: 'mangadex.convert_failed' })
-    }
-    out[i] = list.map((p) => ({ ...p, origin: i }))
-    onFile(++done)
-  }, signal)
-  return out.flat()
-}
 const convertShareOf = (p) => (p === 'capibara' ? 0 : CONVERT_SHARE)
 
 /**
@@ -250,24 +214,6 @@ async function upload(payload, { key, signal, onProgress = () => {} }) {
       mixer.status(platform, 'skipped', { reason: 'no tiene extras' })
       return { skipped: true, reason: `${LABELS[platform]} no tiene extras.` }
     }
-    if (platform === 'mangadex') {
-      return mangadex.withSession(async (_token, user, settings) => {
-        const lang = mangadex.isLang(chapter.lang) ? chapter.lang : settings.lang
-        if (targets.length > 1 && await alreadyThere(platform, t.workId, chapter.number, signal, lang).catch(() => false)) {
-          mixer.status(platform, 'skipped', { reason: 'ya estaba' })
-          return { skipped: true, reason: 'Ya estaba subido.', number: Number(chapter.number) }
-        }
-        mixer.status(platform, 'converting')
-        const files = await mangadexPages(pages, signal, (done) => mixer.converted(platform, done))
-        mixer.status(platform, 'uploading')
-        // La subida pide el token vigente en cada paso: un capítulo grande dura más que sus 15 minutos.
-        const data = await mangadex.uploadChapter(() => mangadex.accessToken(), {
-          user, settings, workId: String(t.workId), chapter: chapterFor(platform, chapter), files, signal, onProgress: report,
-        })
-        markUploaded(platform, t.workId, chapter.number, lang)
-        return data
-      })
-    }
     const mod = remote[platform]
     return mod.withSession(async (session, user) => {
       if (targets.length > 1 && await alreadyThere(platform, t.workId, chapter.number, signal).catch(() => false)) {
@@ -277,8 +223,8 @@ async function upload(payload, { key, signal, onProgress = () => {} }) {
       }
       mixer.status(platform, 'converting')
       const webps = await converted()
-      // Crimson solo acepta WebP; Mangation recibe lo que pese menos.
-      const files = webps.map((w) => (platform === 'mangation' && !w.smaller ? { ...w.original, converted: false } : w))
+      // Mangation recibe lo que pese menos: el WebP o el original.
+      const files = webps.map((w) => (!w.smaller ? { ...w.original, converted: false } : w))
       mixer.status(platform, 'uploading')
       const data = await mod.uploadChapter(session, { user, workId: String(t.workId), chapter: chapterFor(platform, chapter), files, signal, onProgress: report })
       markUploaded(platform, t.workId, chapter.number)
@@ -324,7 +270,7 @@ async function upload(payload, { key, signal, onProgress = () => {} }) {
 
 const errorInfo = (err) => ({ message: err.message, code: err.code || null, status: err.status || null, retryAfter: err.retryAfter ?? null, traceId: err.traceId || null })
 
-/* ---------- Cuenta, obras y capítulos de Crimson y Mangation ---------- */
+/* ---------- Cuenta, obras y capítulos de Mangation ---------- */
 
 const remoteOf = (platform) => {
   if (!remote[platform]) throw new Error('Esa plataforma no usa inicio de sesión.')
@@ -335,40 +281,29 @@ const signIn = (platform, creds) => remoteOf(platform).signIn(creds)
 const signOut = (platform) => remoteOf(platform).signOut()
 
 async function createWork(platform, fields, images) {
-  if (platform === 'mangadex') throw new Error('En MangaDex solo se sube a obras que ya existen: agrégala desde «Agregar obra».')
   const mod = remoteOf(platform)
   const prepared = {}
-  for (const kind of ['cover', 'banner']) {
+  for (const kind of ['cover']) {
     const img = images?.[kind]
     if (!img?.path) continue
     const f = await describeFile(img.path)
     if (!f) throw new Error('La imagen de la obra no es válida.')
-    // Crimson: portada y banner en WebP, a la medida que usa su panel. Mangation: la imagen tal cual (≤ 5 MB).
-    prepared[kind] = platform === 'crimson'
-      ? await webp().toWebp(f, kind === 'cover' ? webp().COVER : webp().BANNER)
-      : { path: f.path, name: f.name, type: f.type, size: f.size }
+    // Mangation: la imagen tal cual (≤ 5 MB).
+    prepared[kind] = { path: f.path, name: f.name, type: f.type, size: f.size }
   }
   return mod.withSession((s, user) => mod.createWork(s, user, fields, prepared))
 }
 
 async function deleteChapter(platform, workId, chapterId) {
   const mod = remoteOf(platform)
-  const ok = await mod.withSession((s) => (platform === 'mangation' ? mod.deleteChapter(s, String(workId), chapterId) : mod.deleteChapter(s, chapterId)))
+  const ok = await mod.withSession((s) => mod.deleteChapter(s, String(workId), chapterId))
   existing.delete(`${platform}|${workId}`)
   return ok
 }
 
-async function renumberChapter(platform, workId, chapterId, number) {
-  if (platform !== 'crimson') throw new Error('Esta plataforma no permite cambiar el número desde la app.')
-  const ok = await crimson.withSession((s) => crimson.renumberChapter(s, chapterId, number))
-  existing.delete(`${platform}|${workId}`)
-  return ok
-}
-
-const genres = (platform) => (platform === 'mangation' ? mangation.listGenres() : crimson.GENRES.map((name) => ({ id: name, name })))
+const genres = () => mangation.listGenres()
 
 module.exports = {
-  mangadex,
-  IDS, LABELS, isId, info, sessions, works, chapters, upload, signIn, signOut, createWork, deleteChapter, renumberChapter, genres,
+  IDS, LABELS, isId, info, sessions, works, chapters, upload, signIn, signOut, createWork, deleteChapter, genres,
   _progressMixer: progressMixer,
 }

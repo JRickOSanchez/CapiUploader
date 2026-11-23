@@ -1,6 +1,5 @@
 /**
- * Plataformas: cuál está activa (cambia obras, formularios y tema), sesiones de Crimson, Mangation y
- * MangaDex (con su grupo, idioma y obras agregadas),
+ * Plataformas: cuál está activa (cambia obras, formularios y tema), la sesión de Mangation,
  * sus obras y capítulos, crear obras y arreglar capítulos subidos. Capibara sigue usando sus canales
  * (api:*, chapter:*, works:*); aquí solo se le leen obras y capítulos para la subida a varias.
  */
@@ -18,7 +17,7 @@ const current = () => (platforms.isId(store.get('platform')) ? store.get('platfo
 const sessionsChanged = () => mainWindow.sendAll('platform:sessions', platforms.sessions())
 
 function assertRemote(platform) {
-  if (!['crimson', 'mangation', 'mangadex'].includes(platform)) throw new Error('Plataforma no válida.')
+  if (platform !== 'mangation') throw new Error('Plataforma no válida.')
   return platform
 }
 
@@ -34,11 +33,7 @@ function register() {
   })
 
   handle('platform:signIn', async (platform, creds = {}) => {
-    const res = await platforms.signIn(assertRemote(platform), {
-      username: String(creds.username || ''), password: String(creds.password || ''),
-      // MangaDex: el cliente personal de la API de la cuenta.
-      clientId: String(creds.clientId || ''), clientSecret: String(creds.clientSecret || ''),
-    })
+    const res = await platforms.signIn(assertRemote(platform), { username: String(creds.username || ''), password: String(creds.password || '') })
     sessionsChanged()
     return res
   })
@@ -65,7 +60,7 @@ function register() {
 
   handle('platform:pickImage', async (kind) => {
     const res = await dialog.showOpenDialog(mainWindow.getWindow(), {
-      title: kind === 'banner' ? 'Elige el banner de la obra' : 'Elige la portada de la obra',
+      title: 'Elige la portada de la obra',
       properties: ['openFile'],
       filters: [{ name: 'Imágenes', extensions: IMAGE_EXTS }],
     })
@@ -79,7 +74,7 @@ function register() {
 
   handle('platform:createWork', withSessions(async (platform, fields = {}, images = {}) => {
     const imgs = {}
-    for (const kind of ['cover', 'banner']) {
+    for (const kind of ['cover']) {
       const p = images?.[kind]?.path
       if (!p) continue
       if (!pickedImages.has(p)) throw new Error('Vuelve a elegir la imagen de la obra.')
@@ -90,38 +85,8 @@ function register() {
     return res
   }))
 
-  // MangaDex: grupos, idioma y aceptación de las reglas; buscar grupos y obras; obras agregadas a mano.
-  const mdx = platforms.mangadex
-  handle('mangadex:setSettings', async (s = {}) => {
-    const res = mdx.setSettings({
-      groups: Array.isArray(s.groups) ? s.groups.map((g) => ({ id: String(g?.id || ''), name: String(g?.name || '') })) : undefined,
-      noGroup: typeof s.noGroup === 'boolean' ? s.noGroup : undefined,
-      lang: typeof s.lang === 'string' ? s.lang : undefined,
-      termsAccepted: typeof s.termsAccepted === 'boolean' ? s.termsAccepted : undefined,
-    })
-    sessionsChanged()
-    return res
-  })
-  handle('mangadex:searchGroups', withSessions((q) => mdx.withSession((t) => mdx.searchGroups(t, String(q || '')))))
-  handle('mangadex:searchManga', withSessions((q) => mdx.withSession((t, _u, s) => mdx.searchManga(t, String(q || ''), s.lang))))
-  handle('mangadex:addWork', async (id) => {
-    mdx.addWork(String(id || ''))
-    mainWindow.sendAll('works:changed', { id: String(id), platform: 'mangadex' })
-    return true
-  })
-  handle('mangadex:removeWork', async (id) => {
-    mdx.removeWork(String(id || ''))
-    mainWindow.sendAll('works:changed', { id: null, platform: 'mangadex' })
-    return true
-  })
-
   handle('platform:deleteChapter', withSessions((platform, workId, chapterId) =>
     platforms.deleteChapter(assertRemote(platform), String(workId), String(chapterId))))
-  handle('platform:renumberChapter', withSessions((platform, workId, chapterId, number) => {
-    const n = Number(number)
-    if (!Number.isFinite(n) || n < 0) throw new Error('Número de capítulo no válido.')
-    return platforms.renumberChapter(assertRemote(platform), String(workId), String(chapterId), n)
-  }))
 }
 
 module.exports = { register }

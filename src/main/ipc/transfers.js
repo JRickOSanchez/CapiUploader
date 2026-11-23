@@ -95,7 +95,7 @@ function registerImport() {
     if (!dirs.length) throw new Error('No hay capítulos que pasar a «Varios capítulos».')
     mainWindow.send('import:handoff', {
       dirs,
-      // Capibara usa ids numéricos; Crimson y Mangation, texto.
+      // Capibara usa ids numéricos; Mangation, texto.
       workId: typeof payload.workId === 'number' ? payload.workId : String(payload.workId ?? ''),
       interval: Math.max(0, Math.floor(Number(payload.interval) || 0)),
       unit: ['minutes', 'hours', 'days'].includes(payload.unit) ? payload.unit : 'minutes',

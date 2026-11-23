@@ -8,7 +8,7 @@
 /* ---------- Capítulos subidos (se guardan por scan) ---------- */
 
 const UPLOADED_MAX = 1000
-// Una lista por scan de Capibara y otra por cada plataforma (Crimson, Mangation).
+// Una lista por scan de Capibara y otra para Mangation.
 const uploadedKey = () => `uploaded:${accountKey()}`
 
 function loadUploaded() {
@@ -32,8 +32,7 @@ function saveUploaded() {
  * Un «Ya estaba publicado» no reemplaza al registro de cuando lo subió el programa.
  */
 function pushUploaded(entry) {
-  // MangaDex: el mismo número en otro idioma es otro capítulo.
-  const same = (e) => e.workId === entry.workId && e.number === entry.number && Boolean(e.extra) === Boolean(entry.extra) && (e.lang || null) === (entry.lang || null)
+  const same = (e) => e.workId === entry.workId && e.number === entry.number && Boolean(e.extra) === Boolean(entry.extra)
   if (entry.kind === 'existing' && batch.uploaded.some((e) => same(e) && e.kind === 'uploaded')) return
   batch.uploaded = batch.uploaded.filter((e) => !same(e))
   batch.uploaded.unshift(entry)
@@ -54,8 +53,6 @@ function uploadedEntry(it, data, kind) {
     number: existing ? shownNumber(data) : it.number,
     extra: existing ? isExtra(data) : Boolean(it.extra),
     volume: existing ? data.volumeNumber ?? null : it.volume ?? null,
-    // Idioma del capítulo en MangaDex (null en las demás plataformas).
-    lang: data.lang || (state.platform === 'mangadex' ? itemLang(it) : null),
     title: (existing ? data.title : it.title) || '',
     folder: it.name,
     dir: it.dir,
@@ -84,7 +81,6 @@ function uploadedRow(e) {
       el('div', { class: 'up-title' },
         el('b', { text: chapterLabel(e.number, e.extra) }),
         e.volume != null ? el('span', { class: 'up-vol', text: `· Vol ${e.volume}` }) : null,
-        e.lang ? el('span', { class: 'up-vol', text: `· ${MDX_LANG_SHORT[e.lang] || e.lang.toUpperCase()}`, title: mdxLangLabel(e.lang) }) : null,
         e.title ? el('span', { class: 'up-name', text: `— ${e.title}` }) : null,
         el('span', { class: 'up-work', text: e.workTitle })),
       el('div', { class: 'ch-meta' },
@@ -213,8 +209,8 @@ async function uploadedActions(e) {
 }
 
 /**
- * Crimson y Mangation: no tienen papelera ni «publicar ya». Crimson deja cambiar el número y borrar;
- * Mangation, borrar. Borrar no se puede deshacer, así que se pide confirmación.
+ * Mangation: no tiene papelera, «publicar ya» ni cambiar el número; solo borrar. Borrar no se puede
+ * deshacer, así que se pide confirmación.
  */
 async function altUploadedActions(e) {
   const name = `${chapterLabel(e.number, false)} de «${e.workTitle || 'la obra'}»`
@@ -226,18 +222,15 @@ async function altUploadedActions(e) {
   }
   const id = await uploadedChapterId(e)
   if (!id) return toast('error', 'No se encontró el capítulo', `${name} ya no está en ${plat().label} (¿lo borraron desde su panel?).`)
-  const canRenumber = state.platform === 'crimson'
   const choice = await ask({
     kind: 'info',
     title: name,
     text: e.kind === 'existing' ? `Ya estaba en ${plat().label} cuando agregaste su carpeta.` : `Lo subió el programa ${relativeFromNow(new Date(e.at))}.`,
     buttons: [
       { value: 'close', label: 'Cerrar', cancel: true },
-      { value: 'delete', label: 'Borrar', kind: canRenumber ? 'ghost danger' : 'danger-solid' },
-      ...(canRenumber ? [{ value: 'number', label: 'Cambiar número', kind: 'primary' }] : []),
+      { value: 'delete', label: 'Borrar', kind: 'danger-solid' },
     ],
   })
-  if (choice === 'number') return renumberUploaded(e, id)
   if (choice !== 'delete') return
   const sure = await ask({
     kind: 'warn',
@@ -267,7 +260,7 @@ async function renumberUploaded(e, id) {
   const n = Number(String(r.input).replace(',', '.'))
   if (r.input === '' || !Number.isFinite(n) || n < 0) return toast('warn', 'Número no válido', 'Escribe un número, por ejemplo 12 o 12.5.')
   if (n === Number(e.number)) return
-  const res = isCapibara() ? await window.capi.chapter.setNumber(id, n) : await window.capi.platform.renumberChapter(state.platform, e.workId, id, n)
+  const res = await window.capi.chapter.setNumber(id, n)
   if (!res.ok) return handleApiError(res.error, `No se pudo cambiar ${e.extra ? 'el extra' : 'el cap'} ${e.number}`)
   const old = e.number
   // Otra entrada de la lista con ese número en la obra era de un capítulo que ya no lo tiene.

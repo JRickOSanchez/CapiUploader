@@ -1,5 +1,5 @@
 /**
- * Capibara Traductor como web de origen (para pasar una obra de tu scan a Crimson o Mangation).
+ * Capibara Traductor como web de origen (para pasar una obra de tu scan a Mangation).
  * La web no entrega las imágenes reales (las protege), así que se leen con la API oficial y la
  * API key del scan dueño de la obra, igual que «Descargar». Solo funciona con obras de los scans
  * agregados en la app, y la key necesita el permiso chapters:write para ver las imágenes.

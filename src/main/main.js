@@ -23,6 +23,11 @@ if (!app.isPackaged && process.env.CAPI_USER_DATA_DIR) app.setPath('userData', p
 store.init(app.getPath('userData'))
 if (store.get('hardwareAcceleration') === false) app.disableHardwareAcceleration()
 
+// ScanCrimson (la web cerró) y la subida a MangaDex se quitaron: se borran sus sesiones guardadas.
+// Si una de ellas era la plataforma activa, la app vuelve sola a Capibara (ver ipc/platforms.js).
+store.forget(['crimsonUser', 'mangadexUser', 'mangadexSettings', 'mangadexWorks', 'mangadexUploadSession'], ['crimsonToken', 'mangadexAuth'])
+if (['crimson', 'mangadex'].includes(store.get('platform'))) store.set('platform', 'capibara')
+
 // Registro de diagnóstico: lo que pasa y lo que falla, también lo que nadie atrapó.
 diagnostics.init(app.getPath('userData'))
 diagnostics.info('app', `CapiUploader ${app.getVersion()} iniciado (Electron ${process.versions.electron}, ${process.platform} ${process.arch})`)
@@ -54,8 +59,6 @@ app.whenReady().then(() => {
   const win = openMainWindow()
   scrape.init(win)
   whatsnew.showIfUpdated(win)
-  // Versión de prueba: la guía de cómo se sube a MangaDex se abre siempre al arrancar.
-  whatsnew.showBetaGuide(win)
   updater.init((s) => mainWindow.send('update:state', s))
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) openMainWindow()

@@ -1,4 +1,4 @@
-// ScanCrimson y Mangation contra servidores falsos: multipart por flujo, límites que pausan la
+// Mangation contra servidores falsos: multipart por flujo, límites que pausan la
 // tanda, capítulos a medias que se retoman y subidas que se cortan pero sí llegaron.
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
@@ -8,7 +8,6 @@ const path = require('node:path')
 const fs = require('node:fs/promises')
 
 const { multipart, createPacer } = require('../src/main/platforms/http')
-const crimson = require('../src/main/platforms/crimson')
 const mangation = require('../src/main/platforms/mangation')
 
 /** Servidor que guarda cada petición (método, ruta, cabeceras, cuerpo) y responde con handler. */
@@ -79,85 +78,6 @@ test('pacer: nunca más peticiones en paralelo que el tope', async () => {
   assert.equal(peak, 2)
 })
 
-test('Crimson: crea el capítulo y sube las páginas en orden con su número', async () => {
-  const srv = await server((c) => {
-    if (c.url === '/api/chapters') return { status: 201, body: { capituloId: 'c9', estado: 'publicado' } }
-    if (c.url === '/api/upload/page') return { body: { ok: true } }
-    return { status: 404, body: { error: 'no' } }
-  })
-  crimson.setBase(srv.url)
-  try {
-    const files = await pages(5)
-    files[1].converted = true
-    const events = []
-    const res = await crimson.uploadChapter('tok', { workId: '7', chapter: { number: 12, title: 'T', notify: false }, files, onProgress: (p) => events.push(p) })
-    assert.equal(res.id, 'c9')
-    const create = JSON.parse(srv.calls[0].body)
-    assert.deepEqual(create, { manga_id: '7', numero: 12, titulo: 'T', fecha_publicacion: null, notify_discord: false })
-    assert.equal(srv.calls[0].headers.authorization, 'Bearer tok')
-    const uploads = srv.calls.filter((c) => c.url === '/api/upload/page').map(parts)
-    assert.equal(uploads.length, 5)
-    assert.deepEqual(uploads.map((u) => u.numero[0]).sort(), ['1', '2', '3', '4', '5'])
-    assert.ok(uploads.every((u) => u.capitulo_id[0] === 'c9' && u.image[0].length === 3000))
-    assert.equal(uploads.filter((u) => u.converted).length, 1, 'converted=1 solo en las páginas convertidas')
-    const last = events.filter((e) => e.phase === 'upload').pop()
-    assert.equal(last.doneBytes, last.totalBytes)
-  } finally { await srv.close() }
-})
-
-test('Crimson: si una página falla, el reintento no crea otro capítulo ni repite páginas', async () => {
-  let failOn = '3'
-  const srv = await server((c) => {
-    if (c.url === '/api/chapters') return { status: 201, body: { capituloId: 'c1' } }
-    if (parts(c).numero[0] === failOn) return { status: 400, body: { error: 'imagen rota' } }
-    return { body: {} }
-  })
-  crimson.setBase(srv.url)
-  try {
-    const files = await pages(4)
-    await assert.rejects(crimson.uploadChapter('tok', { workId: '1', chapter: { number: 3 }, files }), (e) => /página 3/.test(e.message) && e.partialChapterId === 'c1')
-    const before = srv.calls.length
-    failOn = null
-    const res = await crimson.uploadChapter('tok', { workId: '1', chapter: { number: 3 }, files })
-    assert.equal(res.id, 'c1')
-    const again = srv.calls.slice(before)
-    assert.equal(again.filter((c) => c.url === '/api/chapters').length, 0)
-    assert.deepEqual(again.map((c) => parts(c).numero[0]), ['3'])
-  } finally { await srv.close() }
-})
-
-test('Crimson: «máximo N capítulos cada M minutos» pausa la tanda (api.rate_limited)', async () => {
-  const srv = await server(() => ({ status: 429, body: { error: 'Límite alcanzado: máximo 5 capítulos cada 30 minutos' } }))
-  crimson.setBase(srv.url)
-  try {
-    await assert.rejects(crimson.uploadChapter('tok', { workId: '1', chapter: { number: 50 }, files: await pages(1) }),
-      (e) => e.code === 'api.rate_limited' && e.retryAfter === 1800)
-    assert.equal(srv.calls.length, 1, 'no se reintenta a ciegas')
-  } finally { await srv.close() }
-})
-
-test('Crimson: obras y capítulos normalizados; 401 es sesión vencida', async () => {
-  const srv = await server((c) => {
-    if (c.url === '/api/mangas?admin=1') return { body: { mangas: [{ id: 4, titulo: 'Obra', tipo: 'manhwa', estado: 'en_curso', ultimo_capitulo: 9 }] } }
-    if (c.url === '/api/mangas/4?admin=1') return { body: { manga: { id: 4, titulo: 'Obra' }, capitulos: [{ id: 1, numero: '2', estado: 'publicado' }, { id: 2, numero: '10.5', estado: 'programado', fecha_publicacion: '2026-11-01' }] } }
-    return { status: 401, body: { error: 'token' } }
-  })
-  crimson.setBase(srv.url)
-  try {
-    const works = await crimson.listWorks('tok')
-    assert.deepEqual([works[0].id, works[0].title, works[0].type, works[0].lastChapter], ['4', 'Obra', 'manhwa', 9])
-    const ch = await crimson.listChapters('tok', '4')
-    assert.deepEqual(ch.map((c) => [c.number, c.state]), [[10.5, 'scheduled'], [2, 'published']])
-    await assert.rejects(crimson.listWorks('mal').then(() => crimson.getWork('x', 'nada')), (e) => e.code === 'crimson.session_expired')
-  } finally { await srv.close() }
-})
-
-test('Crimson: la caducidad del token se lee del JWT', () => {
-  const payload = Buffer.from(JSON.stringify({ exp: 2000000000 })).toString('base64url')
-  assert.equal(crimson.jwtExpiry(`a.${payload}.b`), 2000000000 * 1000)
-  assert.equal(crimson.jwtExpiry('no-es-jwt'), null)
-})
-
 test('Mangation: login guarda la cookie; el capítulo va en una sola petición con las páginas en orden', async () => {
   const srv = await server((c) => {
     if (c.url === '/api/auth/login') return { body: { user: { id: 'u1', name: 'Ana' } }, headers: { 'set-cookie': '__Host-manga_session=abc; Path=/; HttpOnly' } }
@@ -221,11 +141,11 @@ test('Mangation: un capítulo de más de 200 MB se rechaza antes de enviarlo', a
 test('subida a varias: el avance combina las plataformas y una omitida cuenta como lista', () => {
   const { _progressMixer } = require('../src/main/platforms')
   const events = []
-  const mix = _progressMixer([{ platform: 'mangation' }, { platform: 'crimson' }], 2, 1000, (e) => events.push(e))
+  const mix = _progressMixer([{ platform: 'mangation' }, { platform: 'capibara' }], 2, 1000, (e) => events.push(e))
   const mg = mix.for('mangation', { convertShare: 0.3 })
-  mix.status('crimson', 'skipped')
-  mix.converted('crimson', 1) // ya omitida: no vuelve a «convirtiendo»
-  assert.ok(!events.some((e) => e.platform === 'crimson' && e.status === 'converting'))
+  mix.status('capibara', 'skipped')
+  mix.converted('capibara', 1) // ya omitida: no vuelve a «convirtiendo»
+  assert.ok(!events.some((e) => e.platform === 'capibara' && e.status === 'converting'))
   mix.status('mangation', 'uploading')
   mg({ phase: 'file', index: 0, status: 'done' })
   assert.deepEqual(events.filter((e) => e.phase === 'file'), [{ phase: 'file', index: 0, status: 'done' }])

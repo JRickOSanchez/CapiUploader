@@ -139,9 +139,18 @@ function setSecret(name, value) {
 
 const deleteSecret = (name) => setSecret(name, null)
 
+/** Borra ajustes y secretos que ya no se usan (sin descifrar nada). Solo escribe si había algo. */
+function forget(keys = [], secrets = []) {
+  let changed = false
+  for (const k of keys) if (k in data) { delete data[k]; changed = true }
+  for (const s of secrets) if (data.secrets && s in data.secrets) { delete data.secrets[s]; changed = true }
+  if (changed) save()
+  return changed
+}
+
 module.exports = {
   init, get, set, isEncryptionAvailable,
-  getSecret, setSecret, deleteSecret,
+  getSecret, setSecret, deleteSecret, forget,
   takeLegacyKey, clearLegacyKey,
   listProfiles, getProfile, getProfileKey, upsertProfile, updateProfile, removeProfile,
   getActiveId, setActiveId,

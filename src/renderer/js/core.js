@@ -168,8 +168,8 @@ const WINDOW_MODE = new URLSearchParams(location.search).get('ventana') === 'imp
 const isImportWindow = WINDOW_MODE === 'import'
 
 const state = {
-  platform: 'capibara', // 'capibara' | 'crimson' | 'mangation' (ver platforms.js)
-  sessions: {}, // sesiones de Crimson y Mangation: { loggedIn, user, expiresAt }
+  platform: 'capibara', // 'capibara' | 'mangation' (ver platforms.js)
+  sessions: {}, // sesión de Mangation: { loggedIn, user, expiresAt }
   platformInfo: null, // opciones de sus formularios (tipos, estados, géneros…)
   hasKey: false, // hay con qué subir a la plataforma activa (API key o sesión)
   profiles: [], // scans registrados (sin claves)
@@ -252,7 +252,7 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
    Errores de la API
    ========================================================= */
 function handleApiError(error, title) {
-  if (/^(crimson|mangation)\.session_expired$/.test(error.code || '')) return onSessionExpired(error)
+  if (/^mangation\.session_expired$/.test(error.code || '')) return onSessionExpired(error)
   if (error.code === 'api.key_missing' || error.code === 'api.key_invalid') {
     toast('error', `${activeProfile()?.name || 'Scan'}: API key no válida`, error.message, 8000)
     state.me = null
@@ -281,7 +281,7 @@ let askChain = Promise.resolve()
  * Con `input` ({ label, value, type }) muestra un campo y resuelve con { value, input }; Enter
  * en el campo elige el botón principal.
  */
-function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, input = null, wrap = false }) {
+function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, input = null }) {
   const run = () => new Promise((resolve) => {
     const modal = $('#askModal')
     const cancel = buttons.find((b) => b.cancel) || buttons[0]
@@ -291,8 +291,6 @@ function ask({ kind = 'warn', title, text = '', list = [], more = 0, buttons, in
     $('#askText').textContent = text
     const ul = $('#askList')
     ul.innerHTML = ''
-    // wrap: líneas largas (p. ej. reglas) en varias filas en lugar de cortarlas con «…».
-    ul.classList.toggle('wrap', wrap)
     list.forEach((line) => ul.append(el('li', { text: line })))
     if (more > 0) ul.append(el('li', { class: 'more', text: `…y ${more} más` }))
     ul.hidden = !list.length

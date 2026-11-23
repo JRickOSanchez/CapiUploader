@@ -11,7 +11,7 @@ function coverImg(work, cls = 'cover') {
 }
 
 function workMeta(work) {
-  // Crimson y Mangation no dan idioma ni total de capítulos: se muestra el último.
+  // Mangation no da idioma ni total de capítulos: se muestra el último.
   const count = work.chapters != null ? `${formatNumber(work.chapters)} caps.` : work.lastChapter != null ? `último #${work.lastChapter}` : null
   const meta = el('div', { class: 'work-meta' },
     work.language ? el('span', { class: 'tag', text: work.language }) : null,
@@ -236,7 +236,7 @@ async function loadChapters() {
 }
 
 function latestChapter() {
-  return regularOnly(chaptersInLang(state.chapters, currentMdxLang())).reduce((best, c) => (!best || c.number > best.number ? c : best), null)
+  return regularOnly(state.chapters).reduce((best, c) => (!best || c.number > best.number ? c : best), null)
 }
 
 function latestExtraNumber(list) {
@@ -251,10 +251,7 @@ function applyChapterSuggestions() {
       ? String(Math.floor(latestExtraNumber(state.chapters)) + 1)
       : last ? String(Math.floor(last.number) + 1) : '1'
   }
-  // MangaDex: el tomo no se adivina por el capítulo anterior (sus reglas lo piden así).
-  if (state.autoVolume && state.platform === 'mangadex') {
-    $('#chVolume').value = ''
-  } else if (state.autoVolume) {
+  if (state.autoVolume) {
     $('#chVolume').value = last?.volumeNumber != null ? String(last.volumeNumber) : ''
   }
 }
@@ -270,15 +267,13 @@ function renderWorkInfo() {
     return
   }
   const last = latestChapter()
-  // MangaDex: las cifras son del idioma elegido para el capítulo.
-  const shown = chaptersInLang(state.chapters, currentMdxLang())
-  const scheduled = shown.filter((c) => c.state === 'scheduled').length
-  const extras = extrasOnly(shown).length
+  const scheduled = state.chapters.filter((c) => c.state === 'scheduled').length
+  const extras = extrasOnly(state.chapters).length
   box.append(
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Último cap.' }),
       el('div', { class: 'stat-value', text: last ? `#${last.number}${last.volumeNumber != null ? ` · Vol. ${last.volumeNumber}` : ''}` : '—' })),
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Capítulos' }),
-      el('div', { class: 'stat-value', text: `${formatNumber(shown.length - extras)}${extras ? ` · ${extras} extra${extras === 1 ? '' : 's'}` : ''}` })),
+      el('div', { class: 'stat-value', text: `${formatNumber(state.chapters.length - extras)}${extras ? ` · ${extras} extra${extras === 1 ? '' : 's'}` : ''}` })),
     el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: 'Programados' }),
       el('div', { class: 'stat-value', text: scheduled ? formatNumber(scheduled) : 'Ninguno' })),
   )

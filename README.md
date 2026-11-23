@@ -1,7 +1,7 @@
 # CapiUploader
 
 App de escritorio (Electron) para subir capítulos de manga a **Capibara Traductor** con su API v1, y también a
-**ScanCrimson**, **Mangation** y **MangaDex** (ver «Plataformas»).
+**Mangation** (ver «Plataformas»).
 
 ## Reglas y restricciones
 
@@ -18,8 +18,8 @@ capibaratraductor.com:
   importar desde Capibara).
 - Si las reglas o la API de Capibara cambian, la app se ajusta a ellas, aunque eso signifique quitar funciones.
 
-**Otras webs y plataformas.** La herramienta puede extenderse a otras webs (ScanCrimson, Mangation y los
-sitios de «Importar de web»), siempre con estas condiciones:
+**Otras webs y plataformas.** La herramienta puede extenderse a otras webs (Mangation y los sitios de
+«Importar de web»), siempre con estas condiciones:
 
 - Se usan sus paneles y APIs con la cuenta del propio usuario, con su ritmo de peticiones y sin saltarse
   verificaciones ni protecciones.
@@ -44,106 +44,35 @@ Al actualizar desde la 1.0, la clave guardada se convierte sola en el primer sca
 
 ## Plataformas
 
-Junto al chip del scan, arriba a la derecha, el botón de plataforma cambia entre **Capibara**, **ScanCrimson**,
-**Mangation** y **MangaDex**. Cada una tiene sus obras, su lista de «Capítulos subidos», su última obra elegida y su propio
-estilo (Crimson: vino casi negro con acento rosa y títulos serif; Mangation: violeta grisáceo con lavanda y
-pestañas tipo píldora; MangaDex: gris carbón plano con acento naranja, Poppins sin cursiva y la pestaña activa
-en un bloque naranja relleno). Las fuentes de esos temas van incluidas en `src/renderer/assets/fonts` (licencia OFL,
-ver `OFL.txt`).
+Junto al chip del scan, arriba a la derecha, el botón de plataforma cambia entre **Capibara** y **Mangation**.
+Cada una tiene sus obras, su lista de «Capítulos subidos», su última obra elegida y su propio estilo (Mangation:
+violeta grisáceo con lavanda y pestañas tipo píldora). La fuente de ese tema va incluida en
+`src/renderer/assets/fonts` (licencia OFL, ver `OFL.txt`).
+
+**Plataformas retiradas.** ScanCrimson se quitó en la 1.4.3 porque esa web cierra, y la subida a MangaDex que
+se probó en la 1.5.0-beta.1 se quitó porque no se usaba. Al abrir la app se borran sus sesiones guardadas; si
+una de ellas era la plataforma activa, vuelve sola a Capibara. Importar capítulos *desde* MangaDex («Importar
+de web») sigue igual.
 
 - **Capibara**: API key por scan, como siempre. Tiene todo: tomos, extras, páginas simples, página destacada,
   programar, avisos, «Descargar» y la ventana de importar.
-- **ScanCrimson**: se entra con el usuario y la contraseña del panel (admin.scancrimson.com). Se puede
-  programar la publicación y elegir si se avisa en Discord; no hay tomos, extras, páginas simples ni página
-  destacada, así que el formulario los oculta. Crimson solo acepta páginas **WebP**: la app las convierte sola.
-  Crimson limita los capítulos por cuenta («máximo N capítulos cada M minutos»); al llegar al tope, «Varios
-  capítulos» se pausa con cuenta atrás y sigue sola. Si una página falla a mitad, el capítulo ya creado se
-  recuerda y al reintentar se suben solo las páginas que faltan (sin crear otro).
 - **Mangation**: se entra con el correo y la contraseña de creador (creator.mangation.com). Solo número y
   título: no hay programación ni avisos. El capítulo se sube en una sola petición (máximo 200 MB); si la
   conexión se corta, se revisa si llegó antes de dar un error. Cada página va en WebP si pesa menos que el
   original.
-- La contraseña nunca se guarda: solo la sesión (el token de Crimson, que dura unos 7 días, o la cookie de
-  Mangation), cifrada igual que las API keys. Si vence, la app pide entrar de nuevo.
-- **Nueva obra** abre el formulario de cada plataforma: en Crimson título, tipo, estado, sinopsis, géneros de su
-  lista, +18, portada y banner (se convierten a WebP a la medida de su panel); en Mangation además la
-  demografía, hasta 15 géneros de su lista y la portada obligatoria (hasta 5 MB).
-- En «Capítulos subidos», Crimson permite cambiar el número o borrar, y Mangation y MangaDex borrar (no tienen
-  papelera: se pide confirmación).
-
-### MangaDex
-
-Se sube con la API oficial (v5) de `api.mangadex.org`, y **solo a obras que ya existen en MangaDex**: crear una
-obra allí es un borrador que revisa su staff, así que la app no lo ofrece. El entorno de pruebas
-`api.mangadex.dev` no se usa.
-
-- **Cuenta.** Cada usuario entra con su cuenta y el **cliente personal de la API** (Client ID y Client Secret),
-  que se crea en mangadex.org → Settings → API Clients y que MangaDex puede tardar en aprobar. La contraseña no
-  se guarda: solo el `refresh_token` con el Client ID y el Client Secret, cifrados igual que las API keys. El
-  `access_token` dura 15 minutos y se renueva solo, también a mitad de una subida larga. «Cerrar sesión» los
-  borra.
-- **Cómo se consigue el cliente personal** (según la documentación de MangaDex):
-  1. Entrar en mangadex.org con la cuenta y abrir `https://mangadex.org/settings`.
-  2. En la sección **API Clients**, pedir un cliente personal siguiendo sus instrucciones.
-  3. MangaDex lo aprueba al momento o lo deja **pendiente** hasta que su staff lo apruebe a mano. Mientras esté
-     pendiente no se puede usar.
-  4. Ya aprobado, se ve su **Client ID** (`personal-client-…`). El **Client Secret** aparece con el botón
-     **«Get Secret»**.
-  - El Client Secret es como una contraseña: MangaDex nunca lo pide, y solo sirve para la cuenta dueña del
-    cliente. Este acceso no pide la verificación en dos pasos de la cuenta.
-  - La guía de la versión de prueba explica estos pasos para los usuarios (`src/main/guides/beta-mangadex.md`).
-- **Grupos, idioma y reglas.** En la ventana de la cuenta se eligen **todos los grupos** de scanlation que
-  trabajan los capítulos (hasta 10, por nombre o pegando su enlace), el idioma de las traducciones (Español
-  Latinoamérica por defecto) y se aceptan las [reglas](https://mangadex.org/rules) y los
-  [términos de subida](https://mangadex.org/compliance). Sin aceptarlos no se sube nada, porque cada subida los
-  acepta en nombre de la cuenta (`termsAccepted`). Las reglas piden que quien no tiene grupo cree uno con su
-  nombre de usuario: «Sin grupo» solo aparece si no hay grupos y hay que confirmarlo como autor o traductor
-  autorizado.
-- **Obras.** La lista trae las obras de los grupos y las que agregues con «Agregar obra» (buscando por título o
-  pegando el enlace de la obra). Los capítulos que cuentan como «ya subidos» son los de los grupos (o los de la
-  cuenta, sin grupo), y cada uno trae su idioma.
-- **Idioma por capítulo.** El de la cuenta es el predeterminado, y cada capítulo puede ir en otro (un grupo que
-  traduce a varios idiomas): el campo «Idioma del capítulo (MangaDex)» en «Un capítulo» y una lista en cada fila
-  de «Varios capítulos». Solo se ven si la subida va a MangaDex (activa o en «También a…»). El número siguiente,
-  los «ya existe», los repetidos de la lista y «Capítulos subidos» se cuentan por idioma, porque en MangaDex el
-  12 en español y el 12 en inglés son capítulos distintos.
-- **Páginas.** Las reglas de MangaDex aceptan JPG, PNG o GIF de hasta 20 MB y 10 000 × 10 000 px. Las que
-  cumplen van tal cual; las demás (WebP, AVIF, muy pesadas o muy grandes) se convierten a JPG con el mismo
-  convertidor, y una tira larga (manhwa) se corta en partes de 9000 px de alto. Como máximo 500 imágenes y
-  300 MB por capítulo.
-- **Reglas que revisa la app.** Con MangaDex como destino (activa o en «También a…»):
-  - no se sube sin grupos (o «Sin grupo» confirmado) ni sin aceptar las reglas;
-  - un título con descriptores inventados («[HQ]», «v2», «(LQ)»…) no deja subir; solo se permiten
-    «Censored/Uncensored»;
-  - el tomo no se rellena solo con el del capítulo anterior, porque las reglas piden ponerlo solo si el capítulo
-    ya salió en un tomo; sí se toma de una carpeta «Vol N».
-- **Recordar las reglas.** Antes de la primera subida a MangaDex de cada sesión aparece un recordatorio con las
-  reglas principales. «Ver todas las reglas», el enlace «reglas» de la cuenta y la guía de la beta abren una
-  ventana con la traducción completa de mangadex.org/rules (`src/main/guides/mangadex-rules.md`, incluida en
-  la app). Si algo no coincide, manda la página de MangaDex.
-- **Subida.** MangaDex permite una sola sesión de subida por cuenta. Si hay una abierta que dejó la app, se
-  abandona; si es de otro lado (por ejemplo, la web), la app avisa y no la toca. Las páginas se mandan de 10
-  en 10 y al final se confirma el capítulo con su número, tomo, título, idioma, orden de páginas y, si se
-  programa, la fecha de publicación. Si algo falla antes de confirmar, la sesión se abandona para no dejarla
-  ocupada. Si la respuesta de la confirmación se pierde, se revisa si el capítulo quedó creado.
-- **Revisión.** El primer capítulo de cada idioma lo revisa el staff de MangaDex (normalmente unas horas, hasta
-  48 h). La app lo pregunta antes de subir y lo avisa al terminar.
-- **Ritmo.** MangaDex permite unas 5 peticiones por segundo por IP y bloquea la IP si se insiste tras un 429.
-  La app va de a 2 peticiones con pausa entre ellas, y un 429 detiene todas las peticiones a MangaDex hasta la
-  hora que indica `X-RateLimit-Retry-After`.
-- **Sin «Importar de web».** Con MangaDex activa no aparece, y la ventana de importar no deja usarla como
-  destino: sus reglas no permiten subir trabajo sacado de otras webs ni de otros grupos. No hay extras,
-  páginas simples, página destacada ni avisos.
-- En desarrollo (`electron .`), `CAPI_MANGADEX_BASE` y `CAPI_MANGADEX_AUTH` apuntan a un servidor falso; la
-  app instalada no los lee.
+- La contraseña nunca se guarda: solo la sesión (la cookie de Mangation), cifrada igual que las API keys. Si
+  vence, la app pide entrar de nuevo.
+- **Nueva obra** en Mangation pide título, tipo, estado, demografía, sinopsis, hasta 15 géneros de su lista, +18
+  y la portada obligatoria (hasta 5 MB).
+- En «Capítulos subidos», Mangation permite borrar (no tiene papelera: se pide confirmación).
 
 ### Subir también a otras plataformas
 
-El botón **«También a…»** de la barra inferior (opcional) sube cada capítulo a la vez a las plataformas que
-marques. La obra equivalente se empareja sola por título (o la eliges una vez y se recuerda).
+El botón **«También a…»** de la barra inferior (opcional) sube cada capítulo a la vez a la otra plataforma
+(Capibara y Mangation). La obra equivalente se empareja sola por título (o la eliges una vez y se recuerda).
 
-- Las páginas se leen una sola vez y la conversión a WebP se hace una vez para Crimson y Mangation.
-- Capibara empieza a subir mientras se convierten las páginas de las otras.
+- Las páginas se leen una sola vez y la conversión a WebP para Mangation se hace una vez.
+- Capibara empieza a subir mientras se convierten las páginas para Mangation.
 - Cada plataforma lleva su propio ritmo de peticiones; si una falla, las demás siguen, y al reintentar solo se
   sube a la que faltó.
 - En las plataformas secundarias, si el capítulo ya estaba, se omite.
@@ -151,11 +80,10 @@ marques. La obra equivalente se empareja sola por título (o la eliges una vez y
 
 ### Convertidor WebP
 
-Se usa para Crimson y Mangation, y para pasar a JPG las páginas que MangaDex no acepta (a Capibara van siempre
-los archivos originales). Usa el códec de
+Solo se usa para Mangation (a Capibara van siempre los archivos originales). Usa el códec de
 Chromium en una ventana oculta con 1 a 3 hilos, sin librerías nativas, y se cierra solo tras un minuto sin
 trabajo. Cada página convertida se guarda en `%APPDATA%\CapiUploader\cache\webp` (se limpia sola a los
-3 días), así que los reintentos y las subidas a varias plataformas no la convierten otra vez. Las páginas de más
+3 días), así que los reintentos no la convierten otra vez. Las páginas de más
 de 16 383 px por lado (el máximo de WebP) se reducen lo justo; las que ya son WebP no se tocan.
 
 ## Secciones
@@ -264,7 +192,7 @@ mismo error (la web no los está dando), la importación se detiene en vez de pe
 web tiene el mismo capítulo de varios scans, queda la primera (filtra por scan para elegir otra). En las
 plataformas sin programación (Mangation) no se ofrece «Programarlos uno cada…».
 
-**Desde Capibara** (para pasar una obra de tu scan a Crimson o Mangation): se pega el enlace de la obra
+**Desde Capibara** (para pasar una obra de tu scan a Mangation): se pega el enlace de la obra
 (`https://capibaratraductor.com/<scan>/manga/<obra>`). La web de Capibara protege sus imágenes, así que se
 leen con la API oficial y la API key de ese scan, igual que «Descargar»: solo funciona con obras de los scans
 agregados en la app, y la key necesita el permiso `chapters:write`. La key no sale del proceso principal.
@@ -426,33 +354,49 @@ cada 6 horas. Si la hay, aparece un botón en la barra superior.
   pulsar «Reiniciar y actualizar». Para eso el release debe traer **`latest.yml`** y el
   `CapiUploader-Setup-x.y.z.exe` (con su `.blockmap`) tal como salen de `dist/`. Si falta `latest.yml`,
   avisa y ofrece descargar el instalador.
-- **Portable o .zip**: avisa y abre la descarga del archivo nuevo, que reemplaza al anterior.
+- **.zip o portable**: también se actualiza sola, **en el mismo lugar donde está** (`selfupdate.js`), sin
+  reemplazar archivos a mano:
+  1. Baja en segundo plano el `CapiUploader-x.y.z-win.zip` o el `CapiUploader-Portable-x.y.z.exe` del release
+     y comprueba su **sha256** con el que da GitHub para cada archivo (`digest`). Si no coincide, no se usa.
+  2. Lo deja listo junto a la app, en el mismo disco: el .zip se descomprime en `<carpeta>\.capi-update\x.y.z`
+     (y se revisa que traiga `CapiUploader.exe` y `resources\app.asar`); la portable nueva queda al lado de la
+     actual.
+  3. Al cerrar el programa, o con «Reiniciar y actualizar», un script de PowerShell espera a que la app termine
+     y cambia los archivos. En el .zip mueve cada archivo viejo a un respaldo y pone el nuevo (en el mismo disco
+     son renombres, al instante); si algo falla, devuelve los viejos y la app sigue como estaba. Los archivos
+     que agregaste a esa carpeta no se tocan. En la portable, el .exe nuevo queda con su nombre
+     (`CapiUploader-Portable-1.5.1.exe`) y se borra el viejo; si le cambiaste el nombre, el nuevo toma ese
+     mismo nombre. Con «Reiniciar y actualizar» la app se vuelve a abrir sola.
+  4. Al abrir, la app lee cómo le fue (`update-result.json` y `update-log.txt` en `%APPDATA%\CapiUploader`),
+     lo anota en el diagnóstico y borra lo que haya quedado. Si falló, lo avisa y esa versión se ofrece para
+     bajarla a mano en vez de intentarlo otra vez en cada arranque.
+
+  Si la carpeta no deja escribir (por ejemplo, el .zip descomprimido en Archivos de programa), si el release no
+  trae el sha256 o si falla la descarga, avisa y ofrece descargar el archivo como antes. Las versiones .zip y
+  portable anteriores a la 1.4.3 todavía no saben hacerlo: esa vez hay que bajar la nueva a mano.
 
 Los scans y ajustes se conservan en todos los casos (`%APPDATA%\CapiUploader`). La app no está firmada, así
-que no se comprueba el editor del instalador; sí su sha512, que viene en `latest.yml`.
+que no se comprueba el editor del instalador; sí su sha512 (Setup, en `latest.yml`) o su sha256 (.zip y
+portable, el que da GitHub).
 
 ### Versiones de prueba (beta)
 
-Antes de una versión grande se publica una de prueba, por ejemplo `1.5.0-beta.1`, para que algunos scans la
-usen y reporten fallas.
+Antes de una versión grande se puede publicar una de prueba, por ejemplo `1.5.0-beta.1`, para que algunos
+scans la usen y reporten fallas.
 
 - **Se publica como «pre-release» en GitHub**, nunca como «latest». Así quien tiene una versión final no la
   recibe: la app solo mira el último release final (`/releases/latest`).
 - Quien instala una beta sí ve las versiones de prueba: pasa sola a la siguiente beta y, al salir la final, a
   la final (`1.5.0` es más nueva que `1.5.0-beta.3`).
-- La beta también trae **`latest.yml`**, y hay que subirlo al release junto con el instalador y su `.blockmap`. No
-  afecta a las versiones finales, porque GitHub nunca da un pre-release como «latest». El actualizador de una
-  beta busca primero `beta.yml` y, si no está, usa `latest.yml`.
-- **Guía al abrir.** Con una versión de prueba instalada, cada vez que arranca la app se abre una ventana aparte
-  con la guía de lo que se prueba (`src/main/guides/beta-mangadex.md`, incluida en la app, así que se ve sin
-  conexión): cómo debería funcionar la subida a MangaDex paso a paso, qué no se debe subir, qué significan los
-  errores y cómo reportar una falla. También se abre desde Ajustes → «Ver guía». Con una versión final no aparece.
-- Para volver a la versión final antes de que salga la siguiente, se instala encima el Setup de la última final.
-  Los scans y ajustes se conservan.
-- Las fallas se reportan en [Issues](https://github.com/JRickOSanchez/CapiUploader/issues/new/choose) con el
-  formulario «Reportar una falla» (`.github/ISSUE_TEMPLATE/falla.yml`): versión, plataforma, pasos, mensaje y el
-  registro de Ajustes → Diagnóstico → «Copiar para soporte», que ya tapa contraseñas, API keys, el Client
-  Secret de MangaDex y los tokens. La versión instalada se ve en Ajustes, junto a «Novedades».
+- Una final con número menor que la beta no le llega sola a quien tiene la beta: la `1.4.3` es más vieja que la
+  `1.5.0-beta.1`, así que quien probó esa beta instala la 1.4.3 a mano (o espera a la 1.5.0).
+- La beta también trae **`latest.yml`**, y hay que subirlo al release junto con el instalador y su `.blockmap`.
+  No afecta a las versiones finales, porque GitHub nunca da un pre-release como «latest».
+
+**Reportar una falla.** En [Issues](https://github.com/JRickOSanchez/CapiUploader/issues/new/choose), con el
+formulario «Reportar una falla» (`.github/ISSUE_TEMPLATE/falla.yml`): versión, plataforma, pasos, mensaje y el
+registro de Ajustes → Diagnóstico → «Copiar para soporte», que ya tapa contraseñas, API keys y tokens. La
+versión instalada se ve en Ajustes, junto a «Novedades».
 
 ## Cómo funciona
 
@@ -490,7 +434,7 @@ npm run check  # sintaxis de todos los scripts, sin ejecutarlos
 npm test       # pruebas de test/ con node:test (sin red ni Electron)
 ```
 
-Las pruebas cubren lo que no necesita la ventana: Crimson y Mangation contra servidores falsos (multipart,
+Las pruebas cubren lo que no necesita la ventana: Mangation contra servidores falsos (multipart,
 límites, capítulos a medias, subidas cortadas que sí llegaron, cookie renovada), el avance de la subida a varias, el cliente de la API (paginación, errores, reintentos),
 la descarga de imágenes, la detección de capítulos en carpetas, el cuerpo de la subida, los lectores propios
 (con páginas de ejemplo, incluido el lector cifrado de MangaTV), la validación de obras nuevas y la detección
@@ -501,8 +445,11 @@ pruebas no toquen la del usuario, y `CAPI_TUNNEL_TEST=<url>` fuerza el túnel de
 sitio (sirve para probar el modo Cloudflare con una web que no lo tiene). `CAPI_UPDATE_TEST=1.3.0` hace
 como si la app fuera esa versión del .zip, para probar el aviso de actualización contra los releases
 reales, `CAPI_ENGINE_IDLE_MS=20000` cierra el motor de importación tras 20 s sin uso (en vez de 10 min), y
-`CAPI_WHATSNEW_TEST=1` abre la ventana de novedades al arrancar. `CAPI_CRIMSON_BASE` y `CAPI_MANGATION_BASE`
-apuntan esas plataformas a un servidor de pruebas.
+`CAPI_WHATSNEW_TEST=1` abre la ventana de novedades al arrancar. `CAPI_MANGATION_BASE`
+apunta Mangation a un servidor de pruebas. Para probar la actualización en el lugar sin tocar ninguna app
+de verdad, `CAPI_SELFUPDATE_DIR=<carpeta>` hace que esa carpeta sea la «carpeta del .zip» (con
+`CAPI_UPDATE_TEST` para que haya una versión más nueva) y `CAPI_SELFUPDATE_PORTABLE=<archivo.exe>` hace lo
+mismo con la portable; en desarrollo nunca se vuelve a abrir nada al terminar.
 La app instalada las ignora.
 
 ## Estructura
@@ -512,11 +459,11 @@ La app instalada las ignora.
   - `ipc/` registra los canales que usa la interfaz, por tema: `core.js` (respuesta `{ ok, data }`, clave
     del scan activo y trabajos de uno en uno), `profiles.js` (Mis scans), `system.js` (tema, enlaces,
     actualizaciones), `capibara.js` (obras, capítulos, arreglos y obras nuevas), `files.js` y `transfers.js`
-    (subir, descargar e importar) y `platforms.js` (plataforma activa, sesiones, obras y capítulos de
-    Crimson y Mangation).
+    (subir, descargar e importar) y `platforms.js` (plataforma activa, sesión, obras y capítulos de
+    Mangation).
   - `platforms/`: `index.js` (lo que permite cada plataforma y la subida a varias), `http.js` (peticiones con
-    ritmo por plataforma, reintentos y multipart leído del disco), `crimson.js`, `mangation.js` y `mangadex.js` (cliente y
-    sesión de cada una). `webp.js` es el convertidor (con `renderer/converter.html` y
+    ritmo por plataforma, reintentos y multipart leído del disco), `mangation.js` (cliente y
+    sesión). `webp.js` es el convertidor (con `renderer/converter.html` y
     `preload/converter.js`).
   - Lógica sin Electron, probada en `test/`: `api.js` (cliente de la API), `upload.js` (subida de un
     capítulo), `files.js` (archivos y carpetas), `works.js` (obras nuevas), `download.js` («Descargar») y `zip.js` (los CBZ/ZIP que guarda),
@@ -525,7 +472,8 @@ La app instalada las ignora.
     y Cloudflare) y `readers/` (lectores propios: `index.js` los une, `http.js` y `html.js` son comunes y
     `sites/` tiene un archivo por web con la misma forma: `match`, `headers`, `list`, `pages`).
   - `store.js` guarda ajustes y claves cifradas; `psd.js` convierte los PSD; `archives.js` abre los
-    comprimidos con 7-Zip; `joints.js` lee y sube a los joints; `updater.js` actualiza la app.
+    comprimidos con 7-Zip; `joints.js` lee y sube a los joints; `updater.js` busca y baja las versiones nuevas y
+    `selfupdate.js` instala el .zip y la portable en su lugar.
   - `diagnostics.js` es el registro de diagnóstico (y `ipc/diagnostics.js` sus canales); `whatsnew.js` la
     ventana de novedades y `markdown.js` convierte las notas de los releases a HTML seguro.
 - `src/preload/` — puentes seguros entre la interfaz y el proceso principal: `preload.js` (`window.capi`) y
@@ -534,12 +482,12 @@ La app instalada las ignora.
   - `js/` se carga en este orden: `core.js` (utilidades, estado, tema, avisos, preguntas y los eventos
     `on`/`emit` entre secciones), `platforms.js` (plataforma activa y cuentas), `scans.js`, `works.js`, `names.js`, `picker.js`, `single.js` (Un
     capítulo), `batch.js`, `uploaded.js` y `batch-upload.js` (Varios capítulos), `joints.js` (barra y ventana de los joints),
-    `download.js`, `import.js`, `newwork.js`, `newwork-alt.js` (obra nueva en Crimson y Mangation), `also.js` («También a…»), `mangadex.js` (cuenta y obras de MangaDex),
+    `download.js`, `import.js`, `newwork.js`, `newwork-alt.js` (obra nueva en Mangation), `also.js` («También a…»),
     `update.js`, `settings.js` (Ajustes), `diagnostics.js`, `views.js` y `boot.js`, que inicia todo al final.
   - `whatsnew.html` con `js/whatsnew-window.js` y `css/whatsnew.css` es la ventana de novedades, aparte de la
     principal.
   - `css/` en el orden de la cascada: base, componentes, subir, el estilo Capibara, Mis scans, grupos,
-    secciones, capítulos subidos, joints, obra nueva, diagnóstico, plataformas y los temas de Crimson y Mangation.
+    secciones, capítulos subidos, joints, obra nueva, diagnóstico, plataformas y el tema de Mangation.
 - `src/scraper/` — motor de HaruNeko compilado (Unlicense, ver `HARUNEKO-UNLICENSE`) y su ventana.
 - `scripts/` — `build-scraper.mjs` compila el motor, `build-icon.cjs` genera los íconos,
   `build-installer-art.cjs` las imágenes del instalador y `check.cjs` revisa la sintaxis.

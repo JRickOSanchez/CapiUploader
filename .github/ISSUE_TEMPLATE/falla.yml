@@ -7,13 +7,13 @@ body:
     attributes:
       value: |
         Gracias por avisar. Con estos datos podemos reproducir la falla y corregirla.
-        **Nunca pegues contraseñas, API keys, el Client Secret de MangaDex ni tokens.** El registro de diagnóstico ya los tapa.
+        **Nunca pegues contraseñas, API keys ni tokens.** El registro de diagnóstico ya los tapa.
   - type: input
     id: version
     attributes:
       label: Versión de CapiUploader
       description: Está en Ajustes, o en el nombre del archivo que descargaste.
-      placeholder: "1.5.0-beta.1"
+      placeholder: "1.4.3"
     validations:
       required: true
   - type: dropdown
@@ -21,9 +21,7 @@ body:
     attributes:
       label: Plataforma
       options:
-        - MangaDex
         - Capibara
-        - ScanCrimson
         - Mangation
         - No depende de la plataforma
     validations:
@@ -42,7 +40,7 @@ body:
       label: Qué hacías
       description: Los pasos para llegar a la falla, en orden.
       placeholder: |
-        1. Inicié sesión en MangaDex y elegí mi grupo.
+        1. Elegí mi scan en el menú de arriba a la derecha.
         2. Elegí la obra «…» y agregué la carpeta del capítulo 12.
         3. Pulsé «Subir capítulo».
     validations:
@@ -70,5 +68,5 @@ body:
     attributes:
       label: Antes de enviar
       options:
-        - label: No pegué contraseñas, API keys, el Client Secret ni tokens.
+        - label: No pegué contraseñas, API keys ni tokens.
           required: true

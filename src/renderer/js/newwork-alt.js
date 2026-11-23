@@ -1,23 +1,20 @@
 'use strict'
 
 /* =========================================================
-   «Nueva obra» en ScanCrimson y Mangation: la ficha con lo
-   que pide cada una (Crimson: géneros por nombre, banner
-   opcional; Mangation: demografía, géneros de su lista y
-   portada obligatoria de hasta 5 MB). Las imágenes se mandan
-   tal cual; el proceso principal convierte las de Crimson a WebP.
+   «Nueva obra» en Mangation: demografía, géneros de su lista
+   y portada obligatoria de hasta 5 MB (se manda tal cual).
    ========================================================= */
 const aw = {
   platform: null,
   genres: [], // [{ id, name }]
   chosen: new Set(),
-  images: { cover: null, banner: null }, // { path, name, size, url }
+  images: { cover: null }, // { path, name, size, url }
   onCreated: null,
   createdAt: 0,
   busy: false,
 }
 
-const AW_LIMITS = { crimson: { title: 200, desc: 5000, genres: 20 }, mangation: { title: 180, desc: 10000, genres: 15 } }
+const AW_LIMITS = { mangation: { title: 180, desc: 10000, genres: 15 } }
 
 function awOptions(select, list, value) {
   select.innerHTML = ''
@@ -32,14 +29,12 @@ async function openAltWork({ title = '', onCreated = null } = {}) {
   aw.platform = p
   aw.onCreated = onCreated
   aw.chosen = new Set()
-  aw.images = { cover: null, banner: null }
+  aw.images = { cover: null }
   const meta = plat(p)
   $('#altWorkModal').dataset.platform = p
   $('#altWorkMark').textContent = meta.mark
   $('#altWorkTitle').textContent = `Nueva obra en ${meta.full}`
-  $('#altWorkSub').textContent = p === 'crimson'
-    ? 'Se crea en tu scan de Crimson. La portada (2:3) y el banner se convierten a WebP solos.'
-    : 'Se crea en tu cuenta de creador. Mangation pide portada (hasta 5 MB) y al menos un género.'
+  $('#altWorkSub').textContent = 'Se crea en tu cuenta de creador. Mangation pide portada (hasta 5 MB) y al menos un género.'
   $('#awTitle').value = title
   $('#awDesc').value = ''
   $('#awAdult').checked = false
@@ -48,11 +43,8 @@ async function openAltWork({ title = '', onCreated = null } = {}) {
   awOptions($('#awType'), info.types, 'manga')
   awOptions($('#awStatus'), info.statuses, info.statuses?.[0]?.value)
   awOptions($('#awDemography'), [{ value: '', label: 'Sin demografía' }, ...(info.demographies || [])], '')
-  $$('#altWorkModal [data-aw="demography"]').forEach((n) => { n.hidden = p !== 'mangation' })
-  $('#awBanner').hidden = p !== 'crimson'
-  $('#awCoverReq').textContent = p === 'mangation' ? 'obligatoria · máx. 5 MB' : '2:3 · recomendada'
+  $('#awCoverReq').textContent = 'obligatoria · máx. 5 MB'
   awRenderImage('cover')
-  awRenderImage('banner')
   aw.genres = []
   awRenderGenres()
   awCounters()
@@ -73,14 +65,14 @@ function closeAltWork() {
 
 function awRenderImage(kind) {
   const img = aw.images[kind]
-  const tag = $(kind === 'cover' ? '#awCoverImg' : '#awBannerImg')
+  const tag = $('#awCoverImg')
   tag.hidden = !img
   if (img) tag.src = img.url
   else tag.removeAttribute('src')
 }
 
 function awCounters() {
-  const lim = AW_LIMITS[aw.platform] || AW_LIMITS.crimson
+  const lim = AW_LIMITS[aw.platform] || AW_LIMITS.mangation
   $('#awTitleCount').textContent = `${$('#awTitle').value.length}/${lim.title}`
   $('#awDescCount').textContent = `${$('#awDesc').value.length}/${lim.desc}`
   $('#awGenreCount').textContent = `${aw.chosen.size}/${lim.genres}`
@@ -150,7 +142,6 @@ async function awCreate() {
       adult: $('#awAdult').checked,
     }, {
       cover: aw.images.cover ? { path: aw.images.cover.path } : null,
-      banner: aw.images.banner ? { path: aw.images.banner.path } : null,
     })
     if (!res.ok) { aw.createdAt = 0; $('#awError').textContent = res.error.message; return }
     aw.createdAt = Date.now()
@@ -172,7 +163,6 @@ async function awCreate() {
 
 function initAltWork() {
   $('#awCover').addEventListener('click', () => awPick('cover'))
-  $('#awBanner').addEventListener('click', () => awPick('banner'))
   $('#awCancel').addEventListener('click', closeAltWork)
   $('#awSave').addEventListener('click', awCreate)
   $('#awTitle').addEventListener('input', awCounters)

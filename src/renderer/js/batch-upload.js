@@ -25,7 +25,6 @@ async function batchStart() {
   const scanName = activeProfile()?.name || plat().full
   const workIds = [...new Set(queue.map((i) => i.workId))]
   if (!(await alsoReady(workIds))) return
-  if (!(await mdxRemindRules())) return
   for (const it of queue) { it.status = 'pending'; it.error = ''; it.progress = 0; it.ratePauses = 0 }
   batch.cancelled = false
   setUploadingUI(true)
@@ -90,7 +89,6 @@ async function batchStart() {
         notify: plan.notify,
         announcePage: announcePageFor(it.files),
         extra: Boolean(it.extra),
-        lang: goesToMangadex() ? itemLang(it) : null,
       },
     })
     bytesBefore += sumSize(it.files)
@@ -112,9 +110,8 @@ async function batchStart() {
       tally.ok++
       warnSingles(res.data.singleCheck, itemLabel(it))
       noteJointResult(workById(it.workId), res.data, itemLabel(it))
-      noteMdxReview(res.data, itemLabel(it))
       const cache = state.chaptersByWork.get(it.workId)
-      const entry = { id: res.data.id, number: res.data.number ?? it.number, extra: Boolean(it.extra), extraNumber: it.extra ? it.number : null, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url, lang: res.data.lang || (goesToMangadex() ? itemLang(it) : null) }
+      const entry = { id: res.data.id, number: res.data.number ?? it.number, extra: Boolean(it.extra), extraNumber: it.extra ? it.number : null, volumeNumber: it.volume, title: it.title || '', pages: it.files.length, state: res.data.state, url: res.data.url }
       if (cache) cache.push(entry)
       if (state.selectedWork?.id === it.workId && state.chapters !== cache) state.chapters.push(entry)
       // Sale de la cola y pasa a «Capítulos subidos».

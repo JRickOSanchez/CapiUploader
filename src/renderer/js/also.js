@@ -207,7 +207,7 @@ function okPlatforms(results) {
   return Object.entries(results || {}).filter(([, r]) => r.ok).map(([p]) => p)
 }
 
-/** Texto corto de cómo le fue a cada plataforma («Crimson: límite… · Mangation ✓»). */
+/** Texto corto de cómo le fue a cada plataforma («Capibara ✓ · Mangation: límite…»). */
 function resultsText(results) {
   return Object.entries(results || {}).map(([p, r]) => `${plat(p).label}: ${r.ok ? (r.data?.skipped ? 'ya estaba' : 'subido') : r.error?.message || 'error'}`).join(' · ')
 }

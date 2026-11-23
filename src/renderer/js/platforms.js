@@ -1,9 +1,8 @@
 'use strict'
 
 /* =========================================================
-   Plataformas: Capibara (API key por scan), ScanCrimson y
-   Mangation (cuenta con usuario y contraseña) y MangaDex (cuenta
-   con su cliente personal de la API). La activa decide
+   Plataformas: Capibara (API key por scan) y Mangation
+   (cuenta con usuario y contraseña). La activa decide
    las obras, lo que muestra el formulario (lo que no tiene se
    oculta con data-cap) y el tema (data-platform en <body>).
    ========================================================= */
@@ -15,19 +14,8 @@ const PLATFORMS = {
     mark: 'C',
     heroSub: 'Publica en Capibara Traductor directo desde tu escritorio.',
     kana: '',
-    caps: ['volume', 'extras', 'singles', 'announce', 'schedule', 'notify', 'publish', 'download', 'languages', 'import'],
+    caps: ['volume', 'extras', 'singles', 'announce', 'schedule', 'notify', 'publish', 'download', 'languages'],
     notify: ['Avisar a seguidores', 'Notificaciones, correos, webhooks y Discord. Apágalo para subir capítulos viejos en silencio.'],
-  },
-  crimson: {
-    label: 'ScanCrimson',
-    full: 'ScanCrimson',
-    mark: 'CS',
-    heroSub: 'Publica en ScanCrimson directo desde tu escritorio. Las páginas se convierten a WebP solas.',
-    kana: '',
-    caps: ['schedule', 'notify', 'publish', 'import'],
-    notify: ['Avisar en Discord', 'Crimson anuncia el capítulo en su Discord. Apágalo para subir capítulos viejos en silencio.'],
-    userLabel: 'Usuario',
-    account: 'Entra con tu cuenta del panel de ScanCrimson (admin.scancrimson.com).',
   },
   mangation: {
     label: 'Mangation',
@@ -35,21 +23,9 @@ const PLATFORMS = {
     mark: 'MG',
     heroSub: 'Publica en Mangation directo desde tu escritorio.',
     kana: 'アップロード',
-    caps: ['import'],
+    caps: [],
     userLabel: 'Correo',
     account: 'Entra con tu cuenta de creador de Mangation (creator.mangation.com).',
-  },
-  // Solo obras que ya existen en MangaDex. Sin «Importar de web»: sus reglas no permiten subir
-  // trabajo de otras webs ni de otros grupos.
-  mangadex: {
-    label: 'MangaDex',
-    full: 'MangaDex',
-    mark: 'MD',
-    heroSub: 'Sube los capítulos de tu grupo a MangaDex. Las páginas que no acepta se pasan a JPG solas.',
-    kana: '',
-    caps: ['volume', 'schedule'],
-    userLabel: 'Usuario',
-    account: 'Entra con tu cuenta de MangaDex y el cliente personal de su API. La contraseña no se guarda.',
   },
 }
 const PLATFORM_IDS = Object.keys(PLATFORMS)
@@ -73,12 +49,11 @@ function isConnected(p = state.platform) {
   return Boolean(state.sessions[p]?.loggedIn)
 }
 
-/** Nombre que se muestra de la cuenta de Crimson o Mangation. */
+/** Nombre que se muestra de la cuenta de Mangation. */
 function accountName(p) {
   const u = state.sessions[p]?.user
   if (!u) return null
-  if (p === 'mangadex') return u.username || null
-  return p === 'crimson' ? (u.scanName || u.displayName || u.username) : (u.name || u.email)
+  return u.name || u.email
 }
 
 function refreshConnected() {
@@ -106,12 +81,6 @@ function renderPlatform() {
   if (!hasCap('volume')) { $('#chVolume').value = ''; $('#batchVolume').value = '' }
   if (!hasCap('schedule') && $('#scheduleToggle').checked) { $('#scheduleToggle').checked = false; $('#scheduleToggle').dispatchEvent(new Event('change')) }
   if (!hasCap('download') && state.view === 'download' && !isImportWindow) setView('upload')
-  // En MangaDex no se crean obras: se agregan las que ya existen.
-  const nw = $('#newWorkBtn')
-  if (nw) {
-    nw.lastChild.textContent = state.platform === 'mangadex' ? 'Agregar obra' : 'Nueva obra'
-    nw.title = state.platform === 'mangadex' ? 'Agregar una obra que ya existe en MangaDex' : 'Crear una obra nueva'
-  }
   renderPlatformMenu()
 }
 
@@ -176,7 +145,7 @@ function applyActivePlatform(id, { animate = false } = {}) {
   onScanChanged()
 }
 
-/* ---------- Cuenta de Crimson / Mangation ---------- */
+/* ---------- Cuenta de Mangation ---------- */
 
 let accountFor = null
 
@@ -191,11 +160,6 @@ function openAccountModal(p = state.platform) {
   $('#accountSub').textContent = meta.account
   $('#accountUserLabel').textContent = meta.userLabel
   $('#accountUser').type = p === 'mangation' ? 'email' : 'text'
-  $('#accountMdx').hidden = p !== 'mangadex'
-  $('#accountNote').textContent = p === 'mangadex'
-    ? 'La contraseña no se guarda: solo la sesión y el cliente de la API, cifrados con el almacén seguro de Windows.'
-    : 'La contraseña no se guarda: solo la sesión, cifrada con el almacén seguro de Windows.'
-  if (p === 'mangadex') mdxFillAccount()
   $('#accountUser').value = ''
   $('#accountPass').value = ''
   $('#accountPass').type = 'password'
@@ -206,8 +170,7 @@ function openAccountModal(p = state.platform) {
     ? `Sesión iniciada como ${accountName(p)}${s.expiresAt ? ` · vence ${formatDate(new Date(s.expiresAt))}` : ''}. Para entrar con otra cuenta, escribe sus datos.`
     : ''
   $('#accountOut').hidden = !s?.loggedIn
-  // MangaDex con sesión: el botón guarda grupos, idioma y reglas (para otra cuenta se escriben sus datos).
-  $('#accountSave').textContent = s?.loggedIn ? (p === 'mangadex' ? 'Guardar' : 'Cambiar de cuenta') : 'Iniciar sesión'
+  $('#accountSave').textContent = s?.loggedIn ? 'Cambiar de cuenta' : 'Iniciar sesión'
   $('#accountModal').hidden = false
   setTimeout(() => $('#accountUser').focus(), 50)
 }
@@ -220,7 +183,6 @@ function closeAccountModal() {
 async function saveAccount() {
   const p = accountFor
   if (!p) return
-  if (p === 'mangadex') return mdxSaveAccount()
   const username = $('#accountUser').value.trim()
   const password = $('#accountPass').value
   if (!username || !password) { $('#accountError').textContent = `Escribe tu ${plat(p).userLabel.toLowerCase()} y tu contraseña.`; return }

@@ -329,8 +329,6 @@ function readForm() {
     schedule,
     notify: $('#notifyToggle').checked,
     extra: $('#extraToggle').checked,
-    // Idioma para MangaDex (solo si la subida va allí).
-    lang: document.body.classList.contains('to-mangadex') ? currentMdxLang() : null,
   }
 }
 
@@ -342,7 +340,6 @@ function setHint(id, text, kind = '') {
 
 function validate() {
   if (state.mode === 'batch') return batchValidate()
-  syncMdxTarget()
   const form = readForm()
   const errors = {}
   const show = state.attempted
@@ -351,15 +348,14 @@ function validate() {
   else if (!canUploadTo(state.selectedWork)) errors.work = JOINT_VIEWER_TEXT
 
   // Número (los extras llevan su propia numeración)
-  // MangaDex: solo cuentan los capítulos en el mismo idioma.
-  const existing = usedNumbers(chaptersInLang(state.chapters, form.lang), form.extra)
+  const existing = usedNumbers(state.chapters, form.extra)
   // Reintento de una subida a varias que ya quedó en la plataforma activa: no cuenta como repetido.
   if (single.doneOn.has(state.platform)) existing.delete(form.number)
   $('#chNumberLabel').textContent = form.extra ? 'Número del extra' : 'Número de capítulo'
   if (form.number == null || Number.isNaN(form.number)) errors.number = form.extra ? 'Indica el número del extra.' : 'Indica el número del capítulo.'
   else if (form.number < 0) errors.number = 'El número no puede ser negativo.'
   else if (form.number >= EXTRA_BASE) errors.number = `El número debe ser menor que ${formatNumber(EXTRA_BASE)}.`
-  else if (existing.has(form.number)) errors.number = `${form.extra ? 'El extra' : 'El capítulo'} ${form.number} ya existe en ${isJointWork(state.selectedWork) ? 'este joint' : 'esta obra'}${state.platform === 'mangadex' && form.lang ? ` en ${mdxLangName(form.lang)}` : ''}.`
+  else if (existing.has(form.number)) errors.number = `${form.extra ? 'El extra' : 'El capítulo'} ${form.number} ya existe en ${isJointWork(state.selectedWork) ? 'este joint' : 'esta obra'}.`
   if (errors.number && (show || existing.has(form.number))) setHint('#chNumberHint', errors.number, 'error')
   else if (form.number != null && state.autoNumber && form.extra) setHint('#chNumberHint', 'Sugerido: siguiente extra. Se muestra como «Extra N».', '')
   else if (form.number != null && state.autoNumber && state.chapters.length) setHint('#chNumberHint', 'Sugerido: siguiente al último publicado.', '')
@@ -389,8 +385,6 @@ function validate() {
   // Páginas
   if (!state.files.length) errors.files = 'Agrega las páginas del capítulo.'
   else if (state.files.some((f) => f.size > MAX_BYTES)) errors.files = 'Hay imágenes de más de 40 MB.'
-  // Reglas de MangaDex (grupos, reglas aceptadas, título sin «[HQ]»/«v2»).
-  if (goesToMangadex()) { const p = mdxChapterProblem({ title: $('#chTitle').value }); if (p) errors.mangadex = p }
 
   $('#workTrigger').classList.toggle('invalid', show && Boolean(errors.work))
   $('#titleCounter').textContent = `${$('#chTitle').value.length}/256`
@@ -520,8 +514,6 @@ async function startUpload() {
     const first = Object.keys(errors)[0]
     const focusMap = { work: '#workTrigger', number: '#chNumber', volume: '#chVolume', publish: '#publishAt', files: '#dropzone' }
     if (errors.key) return openKeyModal()
-    // Faltan grupos o aceptar las reglas de MangaDex: se abre la cuenta para arreglarlo.
-    if (first === 'mangadex' && !mdxTitleDescriptor($('#chTitle').value)) { toast('warn', 'Revisa tu cuenta de MangaDex', errors.mangadex); return openAccountModal('mangadex') }
     $(focusMap[first] || '#uploadBtn')?.focus()
     toast('warn', 'Revisa el formulario', errors[first])
     return
@@ -529,7 +521,6 @@ async function startUpload() {
 
   const work = state.selectedWork
   if (!(await alsoReady([work.id]))) return
-  if (!(await mdxRemindRules())) return
   // En un reintento solo se sube a las plataformas donde aún no quedó.
   const sig = `${state.platform}|${work.id}|${form.extra ? 'x' : ''}${form.number}|${state.files.map((f) => f.path).join('|')}`
   if (single.sig !== sig) { single.sig = sig; single.doneOn = new Set() }
@@ -569,7 +560,6 @@ async function startUpload() {
       notify: form.notify,
       announcePage: announcePageFor(state.files),
       extra: form.extra,
-      lang: form.lang,
     },
   })
   unsubscribe()
@@ -603,8 +593,7 @@ async function startUpload() {
   if (res.data.results) toast('success', 'Subido a todas las plataformas', resultsText(res.data.results), 8000)
   warnSingles(res.data.singleCheck, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
   noteJointResult(work, res.data, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
-  noteMdxReview(res.data, form.extra ? `Extra ${form.number}` : `Cap. ${form.number}`)
-  state.chapters.push({ number: res.data.number ?? form.number, extra: form.extra, extraNumber: form.extra ? form.number : null, volumeNumber: form.volumeNumber, state: res.data.state, lang: res.data.lang || form.lang || null })
+  state.chapters.push({ number: res.data.number ?? form.number, extra: form.extra, extraNumber: form.extra ? form.number : null, volumeNumber: form.volumeNumber, state: res.data.state })
   loadChapters()
 }
 

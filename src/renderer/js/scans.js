@@ -8,7 +8,7 @@ const ICON_CHECK_SM = '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>
 const ICON_REFRESH = '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>'
 const ICON_TRASH = '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'
 
-/** El scan de Capibara activo (null en Crimson y Mangation, que usan cuenta en vez de scan). */
+/** El scan de Capibara activo (null en Mangation, que usa cuenta en vez de scan). */
 function activeProfile() {
   if (!isCapibara()) return null
   return state.profiles.find((p) => p.id === state.activeScanId) || null
@@ -36,7 +36,7 @@ function renderScanChip() {
   const dot = $('#scanDot')
   dot.className = 'dot'
   if (!isCapibara()) {
-    // Crimson y Mangation: el chip muestra la cuenta y abre su inicio de sesión.
+    // Mangation: el chip muestra la cuenta y abre su inicio de sesión.
     const name = accountName(state.platform)
     $('#scanName').textContent = name || 'Iniciar sesión'
     dot.classList.add(name ? 'ok' : 'err')

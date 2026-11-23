@@ -2,15 +2,30 @@
 
 /* =========================================================
    Actualizaciones: botón en la barra superior cuando hay una versión nueva.
-   La instalada se baja sola y se instala al cerrar (o al pulsar «Reiniciar»);
-   la portable y la del .zip abren la descarga del release.
+   Las tres (Setup, portable y .zip) se bajan solas y se instalan al cerrar
+   (o al pulsar «Reiniciar»), en el mismo lugar donde está la app. Si no se
+   puede, queda la descarga del release a mano.
    ========================================================= */
-const upd = { state: null, toldReady: false }
+const upd = { state: null, toldReady: false, toldFailure: false }
 
+// Cuando hay que bajarla a mano: qué hacer según cómo se usa la app.
 const UPD_HOW = {
-  installed: 'Se instala encima de esta y conserva tus scans y ajustes.',
-  portable: 'Usas la versión portable: descarga el archivo nuevo y úsalo en lugar de este. Tus scans y ajustes se conservan.',
-  zip: 'Usas la versión del .zip: descárgalo y descomprímelo encima de esta carpeta (con la app cerrada). Tus scans y ajustes se conservan.',
+  installed: 'Descarga el instalador: se instala encima de esta y conserva tus scans y ajustes.',
+  portable: 'Descarga el archivo nuevo y úsalo en lugar de este. Tus scans y ajustes se conservan.',
+  zip: 'Descarga el .zip y descomprímelo encima de esta carpeta (con la app cerrada). Tus scans y ajustes se conservan.',
+}
+// Por qué no se pudo actualizar sola.
+const UPD_WHY = {
+  no_write: 'La carpeta donde está la app no deja escribir (por ejemplo, Archivos de programa), así que no se puede actualizar sola.',
+  no_digest: 'El release no trae los datos para comprobar la descarga, así que no se instala sola.',
+  error: 'No se pudo preparar sola.',
+  failed: 'La última vez no se pudo instalar sola.',
+}
+// Qué se cambia al actualizar, según cómo se usa la app.
+const UPD_WHERE = {
+  installed: 'Se instala encima de esta.',
+  portable: 'Se cambia el archivo portable por el nuevo, en la misma carpeta.',
+  zip: 'Se cambian los archivos de la carpeta donde descomprimiste la app.',
 }
 
 /** ¿Hay algo en marcha que un reinicio cortaría? */
@@ -33,7 +48,7 @@ function renderUpdateChip() {
   $('#updateChipText').textContent = s.status === 'ready'
     ? `Reiniciar para actualizar a ${s.version}`
     : s.status === 'downloading'
-      ? `Bajando la ${s.version}${s.percent ? ` · ${s.percent}%` : '…'}`
+      ? s.phase === 'unpack' ? `Preparando la ${s.version}…` : `Bajando la ${s.version}${s.percent ? ` · ${s.percent}%` : '…'}`
       : `Ya salió la ${s.version}`
   chip.title = s.name || `CapiUploader ${s.version}`
 }
@@ -47,6 +62,7 @@ async function openUpdateDialog() {
       kind: 'info',
       title: `CapiUploader ${s.version} está lista`,
       text: [
+        UPD_WHERE[s.kind] || UPD_WHERE.installed,
         'Se instala sola cuando cierres el programa. Si reinicias ahora, se cierra unos segundos y vuelve a abrirse con tus scans y ajustes.',
         updBusyText(),
       ].filter(Boolean).join(' '),
@@ -72,7 +88,7 @@ async function openUpdateDialog() {
     text: [
       s.name && s.name !== `v${s.version}` ? `«${s.name}».` : '',
       `Tienes la ${s.currentVersion}.`,
-      s.kind === 'installed' ? 'No se pudo bajar sola: descarga el instalador.' : '',
+      s.manual ? UPD_WHY[s.manualReason] || (s.kind === 'installed' ? 'No se pudo bajar sola.' : '') : '',
       UPD_HOW[s.kind] || UPD_HOW.installed,
     ].filter(Boolean).join(' '),
     buttons: [{ value: 'later', label: 'Más tarde', cancel: true }, news, { value: 'get', label: 'Descargar', kind: 'primary' }],
@@ -85,6 +101,10 @@ function onUpdateState(s) {
   const was = upd.state?.status
   upd.state = s
   renderUpdateChip()
+  if (s.lastFailure && !upd.toldFailure) {
+    upd.toldFailure = true
+    toast('warn', `No se pudo actualizar sola a la ${s.lastFailure.version}`, 'Se dejó la versión que tenías, sin tocar tus scans ni ajustes. Descárgala desde el botón de arriba.', 12000)
+  }
   if (s.status === 'ready' && !upd.toldReady) {
     upd.toldReady = true
     toast('success', `CapiUploader ${s.version} lista para instalar`, 'Se instala al cerrar el programa, o pulsa «Reiniciar para actualizar» arriba.', 10000)
